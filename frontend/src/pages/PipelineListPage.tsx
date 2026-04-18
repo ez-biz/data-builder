@@ -1,148 +1,203 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Plus, Trash2, GitBranch, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Link } from "react-router-dom";
+import { Plus, MoreHorizontal, GitBranch } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { usePipelines, useCreatePipeline, useDeletePipeline } from "@/api/pipelines";
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { usePipelines, useDeletePipeline } from "@/api/pipelines";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useToast } from "@/components/ui/toast";
+import type { PipelineListItem } from "@/types/pipeline";
 
-const statusColors: Record<string, "default" | "success" | "destructive" | "warning" | "secondary" | "outline"> = {
-  draft: "secondary",
-  valid: "success",
-  invalid: "destructive",
-  running: "warning",
-  completed: "success",
-  failed: "destructive",
+const STATUS_OPTIONS = [
+  "all",
+  "draft",
+  "valid",
+  "invalid",
+  "running",
+  "completed",
+  "failed",
+] as const;
+
+type PipelineRow = PipelineListItem & {
+  definition?: { nodes?: unknown[] } | null;
 };
 
 export function PipelineListPage() {
-  useDocumentTitle("Pipelines");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const navigate = useNavigate();
-  const { data: pipelines, isLoading } = usePipelines();
-  const createMutation = useCreatePipeline();
+  useDocumentTitle("Pipelines — Data Builder");
+  const { data: pipelines, isLoading, error } = usePipelines();
   const deleteMutation = useDeletePipeline();
+  const { toast } = useToast();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const handleCreate = async () => {
-    const pipeline = await createMutation.mutateAsync({ name: newName });
-    setCreateOpen(false);
-    setNewName("");
-    navigate(`/pipelines/${pipeline.id}`);
+  const rows = ((pipelines ?? []) as PipelineRow[]).filter((p) => {
+    if (statusFilter !== "all" && p.status !== statusFilter) return false;
+    if (search && !p.name.toLowerCase().includes(search.toLowerCase()))
+      return false;
+    return true;
+  });
+
+  const handleDelete = (p: PipelineRow) => {
+    if (!window.confirm(`Delete pipeline "${p.name}"? This cannot be undone.`))
+      return;
+    deleteMutation.mutate(p.id, {
+      onSuccess: () => toast("Pipeline deleted", "success"),
+      onError: () => toast("Failed to delete pipeline", "error"),
+    });
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const columns: DataTableColumn<PipelineRow>[] = [
+    {
+      key: "name",
+      header: "Name",
+      cell: (r) => (
+        <Link
+          to={`/pipelines/${r.id}`}
+          className="font-medium text-foreground hover:underline"
+        >
+          {r.name}
+        </Link>
+      ),
+      sortable: true,
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (r) => <Badge variant="outline">{r.status}</Badge>,
+      width: "w-32",
+    },
+    {
+      key: "nodes",
+      header: "Nodes",
+      cell: (r) => (
+        <span className="font-mono tabular-nums text-muted-foreground">
+          {r.definition?.nodes?.length ?? 0}
+        </span>
+      ),
+      width: "w-20",
+      align: "right",
+    },
+    {
+      key: "updated_at",
+      header: "Updated",
+      cell: (r) =>
+        r.updated_at ? (
+          <span className="font-mono text-[12px] tabular-nums text-muted-foreground">
+            {new Date(r.updated_at).toLocaleDateString()}
+          </span>
+        ) : (
+          "—"
+        ),
+      width: "w-32",
+      sortable: true,
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (r) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="Actions">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link to={`/pipelines/${r.id}`}>Open</Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => handleDelete(r)}
+              className="text-[var(--color-status-error)]"
+            >
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+      width: "w-16",
+      align: "right",
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-muted-foreground">
-          Create and manage your ETL pipelines.
-        </p>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Pipeline
-        </Button>
+    <>
+      <PageHeader
+        title="Pipelines"
+        description="Create and manage your ETL pipelines."
+        actions={
+          <Button asChild variant="default">
+            <Link to="/pipelines/new">
+              <Plus className="h-3.5 w-3.5" /> New Pipeline
+            </Link>
+          </Button>
+        }
+      />
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search pipelines…"
+          className="h-9 max-w-sm"
+        />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-9 w-48">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUS_OPTIONS.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s === "all" ? "All statuses" : s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {pipelines && pipelines.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <GitBranch className="mb-4 h-12 w-12 text-muted-foreground" />
-            <p className="mb-2 text-lg font-medium">No pipelines yet</p>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Create your first ETL pipeline with drag & drop.
-            </p>
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Pipeline
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {pipelines?.map((pipeline) => (
-            <Link key={pipeline.id} to={`/pipelines/${pipeline.id}`}>
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold">{pipeline.name}</h3>
-                    <Badge variant={statusColors[pipeline.status]}>
-                      {pipeline.status}
-                    </Badge>
-                  </div>
-                  {pipeline.description && (
-                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                      {pipeline.description}
-                    </p>
-                  )}
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      Updated {new Date(pipeline.updated_at).toLocaleDateString()}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive h-7"
-                      aria-label={`Delete ${pipeline.name}`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        deleteMutation.mutate(pipeline.id);
-                      }}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>New Pipeline</DialogTitle>
-            <DialogDescription>Give your pipeline a name to get started.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              placeholder="Pipeline name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && newName && handleCreate()}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(r) => r.id}
+        loading={isLoading}
+        error={error ? String(error) : null}
+        empty={
+          (pipelines?.length ?? 0) === 0 ? (
+            <EmptyState
+              icon={GitBranch}
+              title="No pipelines yet"
+              body="Create your first visual ETL pipeline to get started."
+              action={
+                <Button asChild variant="default" size="sm">
+                  <Link to="/pipelines/new">New Pipeline</Link>
+                </Button>
+              }
             />
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setCreateOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreate}
-                disabled={!newName || createMutation.isPending}
-              >
-                Create
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+          ) : (
+            <EmptyState
+              icon={GitBranch}
+              title="No pipelines match your filters"
+              body="Try a different filter or search term."
+            />
+          )
+        }
+      />
+    </>
   );
 }
