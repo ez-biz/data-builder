@@ -41,6 +41,7 @@ import {
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Database } from "lucide-react";
 import type { CDCJob } from "@/types/cdc";
+import { CDCDetailDrawer } from "@/components/cdc/CDCDetailDrawer";
 
 export function CDCPage() {
   useDocumentTitle("CDC Streams — Data Builder");
@@ -54,6 +55,7 @@ export function CDCPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [logsJobId, setLogsJobId] = useState<string | null>(null);
+  const [selectedJob, setSelectedJob] = useState<CDCJob | null>(null);
 
   const connectorNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -163,41 +165,43 @@ export function CDCPage() {
       key: "actions",
       header: "",
       cell: (r) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Actions">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onSelect={() => handleSync(r)}
-              disabled={syncMutation.isPending || r.status === "running"}
-            >
-              Sync now
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => handleSnapshot(r)}
-              disabled={snapshotMutation.isPending || r.status === "running"}
-            >
-              Snapshot
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() =>
-                setLogsJobId((prev) => (prev === r.id ? null : r.id))
-              }
-            >
-              {logsJobId === r.id ? "Hide logs" : "View logs"}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={handleEdit}>Edit</DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => handleDelete(r)}
-              className="text-[var(--color-status-error)]"
-            >
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <span onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Actions">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() => handleSync(r)}
+                disabled={syncMutation.isPending || r.status === "running"}
+              >
+                Sync now
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => handleSnapshot(r)}
+                disabled={snapshotMutation.isPending || r.status === "running"}
+              >
+                Snapshot
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  setLogsJobId((prev) => (prev === r.id ? null : r.id))
+                }
+              >
+                {logsJobId === r.id ? "Hide logs" : "View logs"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleEdit}>Edit</DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => handleDelete(r)}
+                className="text-[var(--color-status-error)]"
+              >
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </span>
       ),
       width: "w-16",
       align: "right",
@@ -220,6 +224,7 @@ export function CDCPage() {
         columns={columns}
         rows={jobs}
         getRowId={(r) => r.id}
+        onRowClick={setSelectedJob}
         loading={isLoading}
         error={error ? String(error) : null}
         empty={
@@ -243,6 +248,8 @@ export function CDCPage() {
       )}
 
       <CDCJobForm open={formOpen} onOpenChange={setFormOpen} />
+
+      <CDCDetailDrawer job={selectedJob} onClose={() => setSelectedJob(null)} />
     </>
   );
 }
