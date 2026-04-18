@@ -138,7 +138,7 @@
 }
 
 .react-flow__edge-path {
-  stroke: #9ca3af;
+  stroke: var(--color-text-muted);
   stroke-width: 1.5;
 }
 
@@ -148,14 +148,14 @@
 }
 
 .react-flow__edge:hover .react-flow__edge-path {
-  stroke: #10b981;
+  stroke: var(--color-node-aggregate);
   stroke-width: 2;
 }
 
 .react-flow__handle {
   width: 8px;
   height: 8px;
-  background: #9ca3af;
+  background: var(--color-text-muted);
   border: 2px solid #ffffff;
   border-radius: 50%;
   transition: background 0.15s ease, transform 0.15s ease;
@@ -176,16 +176,16 @@
 }
 
 .react-flow__controls-button {
-  background: #ffffff;
+  background: var(--color-card);
   border-bottom: 1px solid var(--color-border);
-  color: #6b7280;
+  color: var(--color-text-secondary);
   width: 32px;
   height: 32px;
 }
 
 .react-flow__controls-button:hover {
   background: var(--color-muted);
-  color: #111827;
+  color: var(--color-text-primary);
 }
 
 .react-flow__minimap {
