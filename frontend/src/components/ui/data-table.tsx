@@ -37,6 +37,13 @@ export interface DataTableProps<T> {
   className?: string;
 }
 
+/**
+ * Generic sortable table with loading/empty/error states.
+ *
+ * When `onRowClick` is provided, rows are keyboard-activatable (Enter/Space).
+ * Interactive cell content (e.g. DropdownMenu triggers) must call
+ * `e.stopPropagation()` in its handlers to prevent row-click firing.
+ */
 export function DataTable<T>({
   columns,
   rows,
@@ -50,17 +57,29 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const [sort, setSort] = React.useState<SortState>(null);
 
+  React.useEffect(() => {
+    if (sort && !columns.some((c) => c.key === sort.key)) setSort(null);
+  }, [columns, sort]);
+
   const sortedRows = React.useMemo(() => {
     if (!rows || !sort) return rows;
     const defaultGet = (row: T, key: string) =>
-      (row as unknown as Record<string, string | number | null | undefined>)[key] ?? "";
+      (row as unknown as Record<string, string | number | null | undefined>)[key] ?? null;
     const getVal = getSortValue ?? defaultGet;
+
+    const cmp = (a: unknown, b: unknown): number => {
+      const aNull = a === "" || a == null;
+      const bNull = b === "" || b == null;
+      if (aNull && bNull) return 0;
+      if (aNull) return 1;
+      if (bNull) return -1;
+      if (typeof a === "number" && typeof b === "number") return a - b;
+      return String(a).localeCompare(String(b));
+    };
+
     return [...rows].sort((a, b) => {
-      const av = getVal(a, sort.key);
-      const bv = getVal(b, sort.key);
-      if (av < bv) return sort.dir === "asc" ? -1 : 1;
-      if (av > bv) return sort.dir === "asc" ? 1 : -1;
-      return 0;
+      const result = cmp(getVal(a, sort.key), getVal(b, sort.key));
+      return sort.dir === "asc" ? result : -result;
     });
   }, [rows, sort, getSortValue]);
 
@@ -129,6 +148,15 @@ export function DataTable<T>({
               return (
                 <th
                   key={col.key}
+                  aria-sort={
+                    col.sortable
+                      ? active
+                        ? sort?.dir === "asc"
+                          ? "ascending"
+                          : "descending"
+                        : "none"
+                      : undefined
+                  }
                   className={cn(
                     "px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground",
                     col.width,
@@ -139,7 +167,8 @@ export function DataTable<T>({
                     <button
                       type="button"
                       onClick={() => handleSort(col.key)}
-                      className="inline-flex items-center gap-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:text-foreground"
+                      aria-label={`Sort by ${typeof col.header === "string" ? col.header : col.key}, ${active && sort?.dir === "asc" ? "descending" : "ascending"}`}
+                      className="inline-flex items-center gap-1 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:text-foreground"
                     >
                       {col.header}
                       <SortIcon className="h-3 w-3" />
@@ -153,13 +182,26 @@ export function DataTable<T>({
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
-          {sortedRows!.map((row) => (
+          {(sortedRows ?? rows).map((row) => (
             <tr
               key={getRowId(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onRowClick(row);
+                      }
+                    }
+                  : undefined
+              }
+              role={onRowClick ? "button" : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
               className={cn(
                 "transition-colors",
-                onRowClick && "cursor-pointer hover:bg-muted/50",
+                onRowClick &&
+                  "cursor-pointer hover:bg-muted/50 focus-visible:outline-none focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
               )}
             >
               {columns.map((col) => (
