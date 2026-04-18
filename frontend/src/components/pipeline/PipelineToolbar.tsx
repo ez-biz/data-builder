@@ -5,25 +5,31 @@ import {
   Merge,
   BarChart3,
   HardDrive,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const nodeToolbox = [
-  { type: "source", label: "Source", icon: Database, color: "#3b82f6" },
-  { type: "filter", label: "Filter", icon: Filter, color: "#f59e0b" },
-  { type: "transform", label: "Transform", icon: Wand2, color: "#8b5cf6" },
-  { type: "join", label: "Join", icon: Merge, color: "#06b6d4" },
-  { type: "aggregate", label: "Aggregate", icon: BarChart3, color: "#10b981" },
-  { type: "destination", label: "Destination", icon: HardDrive, color: "#ef4444" },
+interface ChipSpec {
+  type: string;
+  label: string;
+  icon: LucideIcon;
+  var: string;
+}
+
+const nodeToolbox: ChipSpec[] = [
+  { type: "source", label: "Source", icon: Database, var: "--color-node-source" },
+  { type: "filter", label: "Filter", icon: Filter, var: "--color-node-filter" },
+  { type: "transform", label: "Transform", icon: Wand2, var: "--color-node-transform" },
+  { type: "join", label: "Join", icon: Merge, var: "--color-node-join" },
+  { type: "aggregate", label: "Aggregate", icon: BarChart3, var: "--color-node-aggregate" },
+  { type: "destination", label: "Destination", icon: HardDrive, var: "--color-node-destination" },
 ];
 
 export function PipelineToolbar() {
   return (
-    <div className="flex flex-wrap gap-2 rounded-lg border bg-white p-2 shadow-sm">
-      <span className="self-center text-xs font-medium text-muted-foreground mr-1">
-        Drag to add:
-      </span>
-      {nodeToolbox.map(({ type, label, icon: Icon, color }) => (
+    <div className="flex h-11 items-center gap-2 border-b border-border bg-card px-3">
+      <span className="text-[11px] font-medium text-muted-foreground">Drag to add:</span>
+      {nodeToolbox.map(({ type, label, icon: Icon, var: cssVar }) => (
         <div
           key={type}
           draggable
@@ -32,9 +38,13 @@ export function PipelineToolbar() {
             e.dataTransfer.effectAllowed = "copy";
           }}
           className={cn(
-            "flex cursor-grab items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors hover:shadow-sm active:cursor-grabbing",
+            "flex h-7 cursor-grab items-center gap-1.5 rounded-md border bg-card px-2 text-[12px] font-medium transition-all",
+            "hover:shadow-sm active:cursor-grabbing",
           )}
-          style={{ borderColor: color + "60", color }}
+          style={{
+            borderColor: `color-mix(in srgb, var(${cssVar}) 35%, transparent)`,
+            color: `var(${cssVar})`,
+          }}
         >
           <Icon className="h-3.5 w-3.5" />
           {label}
