@@ -97,3 +97,14 @@ def retry_run(pipeline_id: uuid.UUID, run_id: uuid.UUID, db: Session = Depends(g
     if run.status.value not in ("failed", "cancelled"):
         raise HTTPException(status_code=400, detail="Only failed or cancelled runs can be retried")
     return run_service.retry_run(db, run)
+
+
+@router.post("/{pipeline_id}/runs/{run_id}/cancel", response_model=PipelineRunResponse)
+def cancel_run(pipeline_id: uuid.UUID, run_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Cancel a pending or running pipeline run."""
+    run = run_service.get_run(db, run_id)
+    if not run or run.pipeline_id != pipeline_id:
+        raise PipelineNotFoundError(str(run_id))
+    if run.status.value not in ("pending", "running"):
+        raise HTTPException(status_code=400, detail="Only pending or running runs can be cancelled")
+    return run_service.cancel_run(db, run)

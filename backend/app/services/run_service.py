@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -18,14 +17,39 @@ from app.services.notification_service import notify_run_failure
 
 logger = logging.getLogger("data_builder.runs")
 
-# Thread pool for background pipeline execution
-_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="pipeline-worker")
-
 
 def retry_run(db: Session, run: PipelineRun) -> PipelineRun:
     """Re-run a failed pipeline run with the same configuration."""
     pipeline = run.pipeline
     return start_run(db, pipeline, triggered_by="retry")
+
+
+def cancel_run(db: Session, run: PipelineRun) -> PipelineRun:
+    """Mark a run as cancelled and revoke its Celery task if still in flight.
+
+    Revoke sends SIGTERM to the worker child process that's running the task,
+    which prevents it from completing. The run's _run_pipeline guards also
+    protect against state overwrites for races we can't preempt (e.g. revoke
+    lands after DB commit but before worker exits).
+    """
+    if run.celery_task_id:
+        from app.celery_app import celery_app
+
+        try:
+            celery_app.control.revoke(
+                run.celery_task_id, terminate=True, signal="SIGTERM"
+            )
+            logger.info("Revoked celery task %s for run %s", run.celery_task_id, run.id)
+        except Exception:
+            logger.exception("Failed to revoke celery task %s", run.celery_task_id)
+
+    run.status = RunStatus.CANCELLED
+    run.error_message = "Cancelled by user"
+    if run.finished_at is None:
+        run.finished_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(run)
+    return run
 
 
 def get_runs(db: Session, pipeline_id: uuid.UUID) -> list[PipelineRun]:
@@ -75,7 +99,32 @@ def start_run(db: Session, pipeline: Pipeline, triggered_by: str = "manual") -> 
             connector_configs[cid] = (connector_model.connector_type, config)
 
     pipeline_name = pipeline.name
-    _executor.submit(_run_pipeline, run_id, pipeline_id, pipeline_name, definition, connector_configs)
+
+    # Lazy import avoids Celery pulling in at module import time (kept out of
+    # test paths that never dispatch).
+    from app.tasks import run_pipeline_task
+
+    serializable_configs = {
+        cid: [ctype, cfg] for cid, (ctype, cfg) in connector_configs.items()
+    }
+
+    # Pre-generate the Celery task_id so it's durably stored before dispatch —
+    # otherwise cancel could race the task assignment and have nothing to revoke.
+    task_id = str(uuid.uuid4())
+    run.celery_task_id = task_id
+    db.commit()
+    db.refresh(run)
+
+    run_pipeline_task.apply_async(
+        args=(
+            str(run_id),
+            str(pipeline_id),
+            pipeline_name,
+            definition,
+            serializable_configs,
+        ),
+        task_id=task_id,
+    )
     return run
 
 
@@ -92,6 +141,9 @@ def _run_pipeline(
         run = db.query(PipelineRun).filter(PipelineRun.id == run_id).first()
         if not run:
             return
+        if run.status == RunStatus.CANCELLED:
+            logger.info("Run %s was cancelled before execution started", run_id)
+            return
 
         run.status = RunStatus.RUNNING
         run.started_at = datetime.now(timezone.utc)
@@ -104,6 +156,12 @@ def _run_pipeline(
 
         executor = PipelineExecutor(connectors)
         result = executor.execute(definition)
+
+        # Refresh run state to detect cancellation that occurred while we were executing
+        db.refresh(run)
+        if run.status == RunStatus.CANCELLED:
+            logger.info("Run %s was cancelled mid-execution; leaving final state intact", run_id)
+            return
 
         run.finished_at = datetime.now(timezone.utc)
         run.rows_processed = result.rows_processed
