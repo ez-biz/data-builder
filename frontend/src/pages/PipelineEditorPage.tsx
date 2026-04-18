@@ -12,6 +12,7 @@ import {
   X,
   Clock,
   RotateCcw,
+  Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,7 @@ import {
   useRunPipeline,
   usePipelineRuns,
   useRetryRun,
+  useCancelRun,
 } from "@/api/pipelines";
 import { useToast } from "@/components/ui/toast";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -44,6 +46,7 @@ export function PipelineEditorPage() {
   const runMutation = useRunPipeline();
   const { data: runs } = usePipelineRuns(id);
   const retryMutation = useRetryRun();
+  const cancelMutation = useCancelRun();
   const { toast } = useToast();
   const [showRuns, setShowRuns] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -157,6 +160,20 @@ export function PipelineEditorPage() {
     [pipelineId, retryMutation, toast],
   );
 
+  const handleCancel = useCallback(
+    (runId: string) => {
+      if (!pipelineId) return;
+      cancelMutation.mutate(
+        { pipelineId, runId },
+        {
+          onSuccess: () => toast("Run cancelled", "success"),
+          onError: () => toast("Failed to cancel", "error"),
+        },
+      );
+    },
+    [pipelineId, cancelMutation, toast],
+  );
+
   // Debounced auto-save
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
@@ -246,7 +263,16 @@ export function PipelineEditorPage() {
               size="sm"
               variant="default"
               onClick={handleRun}
-              disabled={!pipelineId || runMutation.isPending}
+              disabled={
+                !pipelineId ||
+                runMutation.isPending ||
+                (validateMutation.data && !validateMutation.data.valid)
+              }
+              title={
+                validateMutation.data && !validateMutation.data.valid
+                  ? "Fix validation errors before running"
+                  : undefined
+              }
               className="bg-green-600 hover:bg-green-700"
             >
               {runMutation.isPending ? (
@@ -411,6 +437,17 @@ export function PipelineEditorPage() {
                             >
                               <RotateCcw className="h-2.5 w-2.5" />
                               Retry
+                            </button>
+                          )}
+                          {(run.status === "pending" || run.status === "running") && (
+                            <button
+                              type="button"
+                              onClick={() => handleCancel(run.id)}
+                              disabled={cancelMutation.isPending}
+                              className="inline-flex items-center gap-0.5 text-[10px] text-red-600 hover:underline disabled:opacity-50"
+                            >
+                              <Ban className="h-2.5 w-2.5" />
+                              Cancel
                             </button>
                           )}
                         </div>
