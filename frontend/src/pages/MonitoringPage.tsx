@@ -1,18 +1,16 @@
 import { useState } from "react";
 import {
-  Activity,
-  CheckCircle2,
-  Clock,
-  Database,
   Download,
   Send,
   Loader2,
   RefreshCw,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
 import {
   useMonitoringStats,
   useExportLogs,
@@ -109,74 +107,44 @@ export function MonitoringPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Monitoring</h2>
-        <p className="text-muted-foreground">
-          Pipeline runs, CDC sync status, and log export.
-        </p>
-      </div>
+      <PageHeader
+        title="Monitoring"
+        description="Pipeline runs, CDC sync status, and log export."
+      />
 
       {/* Stats cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Runs</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">{ps.total_runs}</div>
-            <p className="text-xs text-muted-foreground">Last 30 days</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">{ps.success_rate}%</div>
-            <p className="text-xs text-muted-foreground">
-              {ps.completed} completed, {ps.failed} failed
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Duration</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">
-              {ps.avg_duration_seconds != null
-                ? `${ps.avg_duration_seconds.toFixed(1)}s`
-                : "N/A"}
-            </div>
-            <p className="text-xs text-muted-foreground">Per pipeline run</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">CDC Rows Synced</CardTitle>
-            <Database className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">
-              {cs.total_rows_synced.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {cs.total_jobs} jobs ({cs.running} running, {cs.failed} failed)
-            </p>
-          </CardContent>
-        </Card>
+        <StatCard
+          label="Total Runs"
+          value={ps.total_runs}
+          hint="Last 30 days"
+        />
+        <StatCard
+          label="Success Rate"
+          value={`${ps.success_rate}%`}
+          hint={`${ps.completed} completed, ${ps.failed} failed`}
+        />
+        <StatCard
+          label="Avg Duration"
+          value={
+            ps.avg_duration_seconds != null
+              ? `${ps.avg_duration_seconds.toFixed(1)}s`
+              : "N/A"
+          }
+          hint="Per pipeline run"
+        />
+        <StatCard
+          label="CDC Rows Synced"
+          value={cs.total_rows_synced.toLocaleString()}
+          hint={`${cs.total_jobs} jobs (${cs.running} running, ${cs.failed} failed)`}
+        />
       </div>
 
       {/* Run activity chart + status breakdown */}
       <div className="grid gap-6 md:grid-cols-3">
         <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Run Activity (Last 30 Days)</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="p-5">
+            <h3 className="mb-3 text-sm font-semibold">Run Activity (Last 30 Days)</h3>
             {daily.length === 0 ? (
               <p className="text-sm text-muted-foreground">No run data yet.</p>
             ) : (
@@ -193,15 +161,19 @@ export function MonitoringPage() {
                       <div className="absolute bottom-0 flex w-full flex-col items-center">
                         {failedH > 0 && (
                           <div
-                            className="w-full rounded-t bg-red-400"
-                            style={{ height: failedH }}
+                            className="w-full rounded-t"
+                            style={{
+                              height: failedH,
+                              backgroundColor: "var(--color-status-error)",
+                            }}
                           />
                         )}
                         {completedH > 0 && (
                           <div
-                            className="w-full bg-green-500"
+                            className="w-full"
                             style={{
                               height: completedH,
+                              backgroundColor: "var(--color-status-success)",
                               borderRadius: failedH > 0 ? 0 : "4px 4px 0 0",
                             }}
                           />
@@ -215,13 +187,22 @@ export function MonitoringPage() {
                 })}
               </div>
             )}
-            <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+            <div
+              className="mt-2 flex items-center gap-4 text-xs"
+              style={{ color: "#6b7280" }}
+            >
               <span className="flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-sm bg-green-500" />
+                <span
+                  className="inline-block h-2 w-2 rounded-sm"
+                  style={{ backgroundColor: "var(--color-status-success)" }}
+                />
                 Completed
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-sm bg-red-400" />
+                <span
+                  className="inline-block h-2 w-2 rounded-sm"
+                  style={{ backgroundColor: "var(--color-status-error)" }}
+                />
                 Failed
               </span>
             </div>
@@ -229,122 +210,146 @@ export function MonitoringPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Status Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <StatusRow label="Running" count={ps.running} color="bg-blue-500" />
-            <StatusRow label="Pending" count={ps.pending} color="bg-yellow-500" />
-            <StatusRow label="Completed" count={ps.completed} color="bg-green-500" />
-            <StatusRow label="Failed" count={ps.failed} color="bg-red-500" />
-            <StatusRow label="Cancelled" count={ps.cancelled} color="bg-gray-400" />
-            <hr className="my-2" />
-            <h4 className="text-xs font-medium text-muted-foreground">CDC Jobs</h4>
-            <StatusRow label="Idle" count={cs.idle} color="bg-gray-400" />
-            <StatusRow label="Running" count={cs.running} color="bg-blue-500" />
-            <StatusRow label="Failed" count={cs.failed} color="bg-red-500" />
-            <StatusRow label="Paused" count={cs.paused} color="bg-yellow-500" />
+          <CardContent className="p-5">
+            <h3 className="mb-3 text-sm font-semibold">Status Breakdown</h3>
+            <div className="space-y-3">
+              <StatusRow label="Running" count={ps.running} color="bg-blue-500" />
+              <StatusRow label="Pending" count={ps.pending} color="bg-yellow-500" />
+              <StatusRow
+                label="Completed"
+                count={ps.completed}
+                style={{ backgroundColor: "var(--color-status-success)" }}
+              />
+              <StatusRow
+                label="Failed"
+                count={ps.failed}
+                style={{ backgroundColor: "var(--color-status-error)" }}
+              />
+              <StatusRow label="Cancelled" count={ps.cancelled} color="bg-gray-400" />
+            </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* CDC Jobs summary */}
+      <Card>
+        <CardContent className="p-5">
+          <h3 className="mb-3 text-sm font-semibold">CDC Jobs</h3>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <StatusRow label="Idle" count={cs.idle} color="bg-gray-400" />
+            <StatusRow label="Running" count={cs.running} color="bg-blue-500" />
+            <StatusRow
+              label="Failed"
+              count={cs.failed}
+              style={{ backgroundColor: "var(--color-status-error)" }}
+            />
+            <StatusRow label="Paused" count={cs.paused} color="bg-yellow-500" />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Log Export */}
       <Card>
-        <CardHeader>
-          <CardTitle>Log Export</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* File download */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Download Logs</h4>
-              <div className="flex items-center gap-2">
-                <label htmlFor="export-days" className="text-xs text-muted-foreground whitespace-nowrap">
-                  Last
-                </label>
-                <Input
-                  id="export-days"
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={exportDays}
-                  onChange={(e) => setExportDays(Number(e.target.value))}
-                  className="w-20"
-                />
-                <span className="text-xs text-muted-foreground">days</span>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleExport("json")}
-                  disabled={exportMutation.isPending}
-                >
-                  <Download className="mr-1 h-3 w-3" />
-                  Export JSON
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleExport("csv")}
-                  disabled={exportMutation.isPending}
-                >
-                  <Download className="mr-1 h-3 w-3" />
-                  Export CSV
-                </Button>
-              </div>
+        <CardContent className="p-5">
+          <h3 className="mb-3 text-sm font-semibold">Log Export</h3>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="export-days"
+                className="text-xs text-muted-foreground whitespace-nowrap"
+              >
+                Last
+              </label>
+              <Input
+                id="export-days"
+                type="number"
+                min={1}
+                max={365}
+                value={exportDays}
+                onChange={(e) => setExportDays(Number(e.target.value))}
+                className="w-20"
+              />
+              <span className="text-xs text-muted-foreground">days</span>
             </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleExport("json")}
+                disabled={exportMutation.isPending}
+              >
+                <Download className="mr-1 h-3 w-3" />
+                Export JSON
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleExport("csv")}
+                disabled={exportMutation.isPending}
+              >
+                <Download className="mr-1 h-3 w-3" />
+                Export CSV
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-            {/* Webhook push (3rd party integration) */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Push to External Service</h4>
-              <p className="text-xs text-muted-foreground">
-                Send logs to Slack, Datadog, PagerDuty, or any webhook endpoint.
-              </p>
-              <Input
-                placeholder="https://hooks.slack.com/services/..."
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-              />
-              <Input
-                placeholder="Webhook secret (optional)"
-                type="password"
-                value={webhookSecret}
-                onChange={(e) => setWebhookSecret(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={handleWebhookExport}
-                  disabled={!webhookUrl || webhookMutation.isPending}
-                >
-                  {webhookMutation.isPending ? (
-                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                  ) : (
-                    <Send className="mr-1 h-3 w-3" />
-                  )}
-                  Push Logs
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleTestWebhook}
-                  disabled={!webhookUrl || testWebhookMutation.isPending}
-                >
-                  {testWebhookMutation.isPending ? (
-                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-1 h-3 w-3" />
-                  )}
-                  Test
-                </Button>
-              </div>
-              {webhookMutation.data && (
-                <Badge variant={webhookMutation.data.success ? "default" : "destructive"}>
-                  {webhookMutation.data.success ? "Sent successfully" : `Failed: ${webhookMutation.data.error}`}
-                </Badge>
-              )}
+      {/* Push to External Service */}
+      <Card>
+        <CardContent className="p-5">
+          <h3 className="mb-3 text-sm font-semibold">Push to External Service</h3>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Send logs to Slack, Datadog, PagerDuty, or any webhook endpoint.
+            </p>
+            <Input
+              placeholder="https://hooks.slack.com/services/..."
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+            />
+            <Input
+              placeholder="Webhook secret (optional)"
+              type="password"
+              value={webhookSecret}
+              onChange={(e) => setWebhookSecret(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleWebhookExport}
+                disabled={!webhookUrl || webhookMutation.isPending}
+              >
+                {webhookMutation.isPending ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <Send className="mr-1 h-3 w-3" />
+                )}
+                Push Logs
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleTestWebhook}
+                disabled={!webhookUrl || testWebhookMutation.isPending}
+              >
+                {testWebhookMutation.isPending ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                )}
+                Test
+              </Button>
             </div>
+            {webhookMutation.data && (
+              <Badge
+                variant={webhookMutation.data.success ? "default" : "destructive"}
+              >
+                {webhookMutation.data.success
+                  ? "Sent successfully"
+                  : `Failed: ${webhookMutation.data.error}`}
+              </Badge>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -356,15 +361,20 @@ function StatusRow({
   label,
   count,
   color,
+  style,
 }: {
   label: string;
   count: number;
-  color: string;
+  color?: string;
+  style?: React.CSSProperties;
 }) {
   return (
     <div className="flex items-center justify-between text-sm">
       <div className="flex items-center gap-2">
-        <span className={`inline-block h-2 w-2 rounded-full ${color}`} />
+        <span
+          className={`inline-block h-2 w-2 rounded-full ${color ?? ""}`}
+          style={style}
+        />
         {label}
       </div>
       <span className="font-medium tabular-nums">{count}</span>
