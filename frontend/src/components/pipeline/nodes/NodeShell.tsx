@@ -93,9 +93,9 @@ export function NodeShell({
             />
           ))
         ) : (
-          <Handle type="target" position={Position.Left} />
+          <Handle type="target" position={Position.Left} id="input" />
         ))}
-      {hasOutput && <Handle type="source" position={Position.Right} />}
+      {hasOutput && <Handle type="source" position={Position.Right} id="output" />}
     </div>
   );
 }
