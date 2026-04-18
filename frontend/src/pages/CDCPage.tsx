@@ -1,17 +1,12 @@
-import { useState } from "react";
-import {
-  Plus,
-  Trash2,
-  Download,
-  Loader2,
-  RefreshCw,
-  Database,
-  CloudUpload,
-} from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, MoreHorizontal, CloudUpload, Loader2 } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Select,
   SelectContent,
@@ -26,6 +21,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/toast";
 import { useConnectors } from "@/api/connectors";
 import { useSchemas, useTables, useColumns } from "@/api/catalog";
@@ -38,204 +39,211 @@ import {
   useSyncLogs,
 } from "@/api/cdc";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import type { CDCJob, CDCStatus } from "@/types/cdc";
+import { Database } from "lucide-react";
+import type { CDCJob } from "@/types/cdc";
 
 export function CDCPage() {
-  useDocumentTitle("CDC Streams");
-  const { data: jobs, isLoading } = useCDCJobs();
-  const [formOpen, setFormOpen] = useState(false);
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">CDC Streams</h2>
-          <p className="text-muted-foreground">
-            Capture database changes and stream them to S3.
-          </p>
-        </div>
-        <Button onClick={() => setFormOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New CDC Job
-        </Button>
-      </div>
-
-      {jobs && jobs.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <CloudUpload className="mb-4 h-12 w-12 text-muted-foreground" />
-            <p className="mb-2 text-lg font-medium">No CDC jobs yet</p>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Set up change data capture to stream table changes to S3.
-            </p>
-            <Button onClick={() => setFormOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create CDC Job
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {jobs?.map((job) => (
-            <CDCJobCard
-              key={job.id}
-              job={job}
-              isSelected={selectedJobId === job.id}
-              onSelect={() =>
-                setSelectedJobId(selectedJobId === job.id ? null : job.id)
-              }
-            />
-          ))}
-        </div>
-      )}
-
-      {selectedJobId && <SyncLogPanel jobId={selectedJobId} />}
-
-      <CDCJobForm open={formOpen} onOpenChange={setFormOpen} />
-    </div>
-  );
-}
-
-function CDCJobCard({
-  job,
-  isSelected,
-  onSelect,
-}: {
-  job: CDCJob;
-  isSelected: boolean;
-  onSelect: () => void;
-}) {
+  useDocumentTitle("CDC Streams — Data Builder");
+  const { data: jobs, isLoading, error } = useCDCJobs();
+  const { data: connectors } = useConnectors();
   const { toast } = useToast();
+
   const syncMutation = useTriggerSync();
   const snapshotMutation = useTriggerSnapshot();
   const deleteMutation = useDeleteCDCJob();
 
-  return (
-    <Card
-      className={`cursor-pointer transition-shadow hover:shadow-md ${isSelected ? "ring-2 ring-primary" : ""}`}
-      onClick={onSelect}
-    >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-base">{job.name}</CardTitle>
-        <CDCStatusBadge status={job.status} />
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-1 text-sm">
-          <p className="font-mono text-xs text-muted-foreground">
-            {job.source_schema}.{job.source_table}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Tracking: <span className="font-mono">{job.tracking_column}</span>
-          </p>
-          <p className="text-xs text-muted-foreground">
-            → s3://{job.s3_bucket}/{job.s3_prefix}
-          </p>
-          <div className="flex items-center gap-3 pt-1">
-            <span className="text-xs tabular-nums">
-              {job.total_rows_synced.toLocaleString()} rows synced
-            </span>
-            {job.last_sync_at && (
-              <span className="text-[10px] text-muted-foreground tabular-nums">
-                Last:{" "}
-                {new Intl.DateTimeFormat(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }).format(new Date(job.last_sync_at))}
-              </span>
-            )}
-          </div>
-          {job.error_message && (
-            <p className="text-xs text-red-600 line-clamp-1">
-              {job.error_message}
-            </p>
-          )}
-        </div>
+  const [formOpen, setFormOpen] = useState(false);
+  const [logsJobId, setLogsJobId] = useState<string | null>(null);
 
-        <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              syncMutation.mutate(job.id, {
-                onSuccess: () => toast("Sync started", "success"),
-                onError: () => toast("Sync failed", "error"),
-              })
-            }
-            disabled={syncMutation.isPending || job.status === "running"}
-          >
-            {syncMutation.isPending ? (
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-1 h-3 w-3" />
-            )}
-            Sync
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              snapshotMutation.mutate(job.id, {
-                onSuccess: () => toast("Snapshot started", "success"),
-                onError: () => toast("Snapshot failed", "error"),
-              })
-            }
-            disabled={snapshotMutation.isPending || job.status === "running"}
-          >
-            <Download className="mr-1 h-3 w-3" />
-            Snapshot
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="ml-auto text-destructive"
-            onClick={() => {
-              if (
-                !window.confirm(
-                  `Delete CDC job "${job.name}"? This cannot be undone.`,
-                )
-              )
-                return;
-              deleteMutation.mutate(job.id, {
-                onSuccess: () => toast("CDC job deleted", "success"),
-                onError: () => toast("Delete failed", "error"),
-              });
-            }}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+  const connectorNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (connectors ?? []).forEach((c) => map.set(c.id, c.name));
+    return map;
+  }, [connectors]);
 
-function CDCStatusBadge({ status }: { status: CDCStatus }) {
-  const styles: Record<CDCStatus, string> = {
-    idle: "bg-gray-100 text-gray-800",
-    running: "bg-blue-100 text-blue-800",
-    paused: "bg-yellow-100 text-yellow-800",
-    failed: "bg-red-100 text-red-800",
+  const handleSync = (job: CDCJob) => {
+    syncMutation.mutate(job.id, {
+      onSuccess: () => toast("Sync started", "success"),
+      onError: () => toast("Sync failed", "error"),
+    });
   };
+
+  const handleSnapshot = (job: CDCJob) => {
+    snapshotMutation.mutate(job.id, {
+      onSuccess: () => toast("Snapshot started", "success"),
+      onError: () => toast("Snapshot failed", "error"),
+    });
+  };
+
+  const handleDelete = (job: CDCJob) => {
+    if (!window.confirm(`Delete CDC job "${job.name}"? This cannot be undone.`))
+      return;
+    deleteMutation.mutate(job.id, {
+      onSuccess: () => {
+        toast("CDC job deleted", "success");
+        if (logsJobId === job.id) setLogsJobId(null);
+      },
+      onError: () => toast("Delete failed", "error"),
+    });
+  };
+
+  const handleEdit = () => {
+    // T6.3 will introduce the detail drawer which includes edit.
+    toast("Edit not implemented yet", "error");
+  };
+
+  const columns: DataTableColumn<CDCJob>[] = [
+    {
+      key: "name",
+      header: "Name",
+      cell: (r) => (
+        <span className="font-medium text-foreground">{r.name}</span>
+      ),
+      sortable: true,
+    },
+    {
+      key: "connector",
+      header: "Connector",
+      cell: (r) => (
+        <span className="font-mono text-[12px] text-muted-foreground">
+          {connectorNameById.get(r.connector_id) ?? r.connector_id.slice(0, 8)}
+        </span>
+      ),
+      width: "w-40",
+    },
+    {
+      key: "source",
+      header: "Source",
+      cell: (r) => (
+        <span className="font-mono text-[12px] text-muted-foreground">
+          {r.source_schema}.{r.source_table}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (r) => (
+        <Badge variant="outline">
+          {r.status === "running" && (
+            <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />
+          )}
+          {r.status}
+        </Badge>
+      ),
+      width: "w-32",
+    },
+    {
+      key: "last_sync_at",
+      header: "Last sync",
+      cell: (r) =>
+        r.last_sync_at ? (
+          <span className="font-mono text-[12px] tabular-nums text-muted-foreground">
+            {new Date(r.last_sync_at).toLocaleDateString()}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+      width: "w-32",
+      sortable: true,
+    },
+    {
+      key: "total_rows_synced",
+      header: "Rows synced",
+      cell: (r) => (
+        <span className="font-mono tabular-nums text-muted-foreground">
+          {r.total_rows_synced.toLocaleString()}
+        </span>
+      ),
+      width: "w-32",
+      align: "right",
+      sortable: true,
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (r) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="Actions">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={() => handleSync(r)}
+              disabled={syncMutation.isPending || r.status === "running"}
+            >
+              Sync now
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => handleSnapshot(r)}
+              disabled={snapshotMutation.isPending || r.status === "running"}
+            >
+              Snapshot
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() =>
+                setLogsJobId((prev) => (prev === r.id ? null : r.id))
+              }
+            >
+              {logsJobId === r.id ? "Hide logs" : "View logs"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={handleEdit}>Edit</DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => handleDelete(r)}
+              className="text-[var(--color-status-error)]"
+            >
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+      width: "w-16",
+      align: "right",
+    },
+  ];
+
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${styles[status]}`}
-    >
-      {status === "running" && (
-        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+    <>
+      <PageHeader
+        title="CDC Streams"
+        description="Capture database changes and stream them to S3."
+        actions={
+          <Button onClick={() => setFormOpen(true)}>
+            <Plus className="h-3.5 w-3.5" /> Add CDC Job
+          </Button>
+        }
+      />
+
+      <DataTable
+        columns={columns}
+        rows={jobs}
+        getRowId={(r) => r.id}
+        loading={isLoading}
+        error={error ? String(error) : null}
+        empty={
+          <EmptyState
+            icon={CloudUpload}
+            title="No CDC jobs yet"
+            body="Set up change data capture to stream table changes to S3."
+            action={
+              <Button onClick={() => setFormOpen(true)} size="sm">
+                <Plus className="h-3.5 w-3.5" /> Add CDC Job
+              </Button>
+            }
+          />
+        }
+      />
+
+      {logsJobId && (
+        <div className="mt-6">
+          <SyncLogPanel jobId={logsJobId} />
+        </div>
       )}
-      {status}
-    </span>
+
+      <CDCJobForm open={formOpen} onOpenChange={setFormOpen} />
+    </>
   );
 }
 
@@ -299,7 +307,9 @@ function SyncLogPanel({ jobId }: { jobId: string }) {
                   </span>
                 </div>
                 {log.error_message && (
-                  <span className="text-xs text-red-600">{log.error_message}</span>
+                  <span className="text-xs text-[var(--color-status-error)]">
+                    {log.error_message}
+                  </span>
                 )}
               </div>
             ))}
@@ -537,9 +547,7 @@ function CDCJobForm({
                 </div>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">
-                  Prefix
-                </label>
+                <label className="text-xs text-muted-foreground">Prefix</label>
                 <Input
                   value={s3Prefix}
                   onChange={(e) => setS3Prefix(e.target.value)}
