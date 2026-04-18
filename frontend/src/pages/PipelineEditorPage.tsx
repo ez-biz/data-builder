@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PipelineCanvas } from "@/components/pipeline/PipelineCanvas";
 import { PipelineToolbar } from "@/components/pipeline/PipelineToolbar";
 import { NodeConfigPanel } from "@/components/pipeline/NodeConfigPanel";
@@ -404,9 +405,10 @@ export function PipelineEditorPage() {
               </div>
               <div className="overflow-auto p-2" style={{ maxHeight: "calc(100% - 3rem)" }}>
                 {!runs || runs.length === 0 ? (
-                  <p className="p-4 text-center text-sm text-muted-foreground">
-                    No runs yet
-                  </p>
+                  <EmptyState
+                    title="No runs yet"
+                    body="Click Run to execute this pipeline."
+                  />
                 ) : (
                   <div className="space-y-2">
                     {runs.map((run) => {
