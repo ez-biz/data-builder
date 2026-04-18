@@ -34,7 +34,6 @@ import {
 } from "@/api/pipelines";
 import { useToast } from "@/components/ui/toast";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import type { RunStatus } from "@/types/pipeline";
 
 export function PipelineEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -410,71 +409,72 @@ export function PipelineEditorPage() {
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {runs.map((run) => (
-                      <div
-                        key={run.id}
-                        className="rounded-lg border p-3 text-sm"
-                      >
-                        <div className="flex items-center justify-between">
-                          <RunStatusBadge status={run.status} />
-                          <span className="text-[10px] text-muted-foreground tabular-nums">
-                            {run.created_at
-                              ? new Intl.DateTimeFormat(undefined, {
-                                  month: "short",
-                                  day: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }).format(new Date(run.created_at))
-                              : ""}
-                          </span>
-                        </div>
-                        {run.rows_processed != null && (
-                          <p className="mt-1 text-xs text-muted-foreground tabular-nums">
-                            {run.rows_processed.toLocaleString()} rows processed
-                          </p>
-                        )}
-                        {run.error_message && (
-                          <p className="mt-1 text-xs text-red-600 line-clamp-2">
-                            {run.error_message}
-                          </p>
-                        )}
-                        {run.started_at && run.finished_at && (
-                          <p className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
-                            Duration:{" "}
-                            {((new Date(run.finished_at).getTime() -
-                              new Date(run.started_at).getTime()) /
-                              1000).toFixed(1)}s
-                          </p>
-                        )}
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="text-[10px] text-muted-foreground">
-                            via {run.triggered_by}
-                          </span>
-                          {(run.status === "failed" || run.status === "cancelled") && (
-                            <button
-                              type="button"
-                              onClick={() => handleRetry(run.id)}
-                              disabled={retryMutation.isPending}
-                              className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:underline disabled:opacity-50"
-                            >
-                              <RotateCcw className="h-2.5 w-2.5" />
-                              Retry
-                            </button>
+                    {runs.map((run) => {
+                      const ts = run.created_at
+                        ? new Intl.DateTimeFormat(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }).format(new Date(run.created_at))
+                        : "";
+                      const durationMs =
+                        run.started_at && run.finished_at
+                          ? new Date(run.finished_at).getTime() -
+                            new Date(run.started_at).getTime()
+                          : null;
+                      return (
+                        <div
+                          key={run.id}
+                          className="rounded-md border border-border p-3 text-sm"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <Badge status={run.status}>{run.status}</Badge>
+                            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                              {durationMs != null
+                                ? `${(durationMs / 1000).toFixed(1)}s`
+                                : "—"}
+                              {run.rows_processed != null &&
+                                ` · ${run.rows_processed.toLocaleString()} rows`}
+                            </span>
+                          </div>
+                          {run.error_message && (
+                            <p className="mt-1 line-clamp-2 text-[11px] text-[var(--color-status-error)]">
+                              {run.error_message}
+                            </p>
                           )}
-                          {(run.status === "pending" || run.status === "running") && (
-                            <button
-                              type="button"
-                              onClick={() => handleCancel(run.id)}
-                              disabled={cancelMutation.isPending}
-                              className="inline-flex items-center gap-0.5 text-[10px] text-red-600 hover:underline disabled:opacity-50"
-                            >
-                              <Ban className="h-2.5 w-2.5" />
-                              Cancel
-                            </button>
-                          )}
+                          <div className="mt-1 flex items-center justify-between">
+                            <span className="text-[11px] text-muted-foreground">
+                              {ts} · via {run.triggered_by}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {(run.status === "failed" ||
+                                run.status === "cancelled") && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRetry(run.id)}
+                                  disabled={retryMutation.isPending}
+                                  className="inline-flex items-center gap-0.5 text-[11px] text-[var(--color-status-info)] hover:underline disabled:opacity-50"
+                                >
+                                  <RotateCcw className="h-3 w-3" /> Retry
+                                </button>
+                              )}
+                              {(run.status === "pending" ||
+                                run.status === "running") && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancel(run.id)}
+                                  disabled={cancelMutation.isPending}
+                                  className="inline-flex items-center gap-0.5 text-[11px] text-[var(--color-status-error)] hover:underline disabled:opacity-50"
+                                >
+                                  <Ban className="h-3 w-3" /> Cancel
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -483,26 +483,5 @@ export function PipelineEditorPage() {
         </div>
       </div>
     </ReactFlowProvider>
-  );
-}
-
-function RunStatusBadge({ status }: { status: RunStatus }) {
-  const styles: Record<RunStatus, string> = {
-    pending: "bg-yellow-100 text-yellow-800",
-    running: "bg-blue-100 text-blue-800",
-    completed: "bg-green-100 text-green-800",
-    failed: "bg-red-100 text-red-800",
-    cancelled: "bg-gray-100 text-gray-800",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${styles[status]}`}
-    >
-      {status === "running" && (
-        <Loader2 className="h-2.5 w-2.5 animate-spin" />
-      )}
-      {status}
-    </span>
   );
 }
