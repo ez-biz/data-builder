@@ -46,6 +46,24 @@ services:
       - ../backend/app:/app/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
+  worker:
+    build:
+      context: ../backend
+      dockerfile: ../docker/backend.Dockerfile
+    environment:
+      DATABASE_URL: postgresql://databuilder:localdev@postgres:5432/databuilder
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: docker-dev-key-change-in-production
+      LOG_LEVEL: DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../backend/app:/app/app
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4
+
   frontend:
     build:
       context: ../frontend

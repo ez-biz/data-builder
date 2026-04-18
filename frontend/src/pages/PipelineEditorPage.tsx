@@ -12,10 +12,12 @@ import {
   X,
   Clock,
   RotateCcw,
+  Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PipelineCanvas } from "@/components/pipeline/PipelineCanvas";
 import { PipelineToolbar } from "@/components/pipeline/PipelineToolbar";
 import { NodeConfigPanel } from "@/components/pipeline/NodeConfigPanel";
@@ -29,10 +31,10 @@ import {
   useRunPipeline,
   usePipelineRuns,
   useRetryRun,
+  useCancelRun,
 } from "@/api/pipelines";
 import { useToast } from "@/components/ui/toast";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import type { RunStatus } from "@/types/pipeline";
 
 export function PipelineEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -44,6 +46,7 @@ export function PipelineEditorPage() {
   const runMutation = useRunPipeline();
   const { data: runs } = usePipelineRuns(id);
   const retryMutation = useRetryRun();
+  const cancelMutation = useCancelRun();
   const { toast } = useToast();
   const [showRuns, setShowRuns] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -157,6 +160,20 @@ export function PipelineEditorPage() {
     [pipelineId, retryMutation, toast],
   );
 
+  const handleCancel = useCallback(
+    (runId: string) => {
+      if (!pipelineId) return;
+      cancelMutation.mutate(
+        { pipelineId, runId },
+        {
+          onSuccess: () => toast("Run cancelled", "success"),
+          onError: () => toast("Failed to cancel", "error"),
+        },
+      );
+    },
+    [pipelineId, cancelMutation, toast],
+  );
+
   // Debounced auto-save
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
@@ -208,7 +225,7 @@ export function PipelineEditorPage() {
           <div className="flex items-center gap-2">
             <Button
               size="sm"
-              variant="outline"
+              variant="ghost"
               onClick={handleValidate}
               disabled={!pipelineId || validateMutation.isPending}
             >
@@ -219,35 +236,50 @@ export function PipelineEditorPage() {
               )}
               Validate
             </Button>
+
             <Button
               size="sm"
+              variant="ghost"
               onClick={handleSave}
-              disabled={saveMutation.isPending}
+              disabled={saveMutation.isPending || createMutation.isPending}
             >
-              <Save className="mr-1 h-3 w-3" />
+              {saveMutation.isPending || createMutation.isPending ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <Save className="mr-1 h-3 w-3" />
+              )}
               Save
             </Button>
+
             <Button
               size="sm"
-              variant="outline"
-              onClick={() => setShowSchedule(!showSchedule)}
+              variant="ghost"
+              onClick={() => setShowSchedule((s) => !s)}
               disabled={!pipelineId}
             >
               <Clock className="mr-1 h-3 w-3" />
               Schedule
-              {cronValue && (
-                <Badge variant="secondary" className="ml-1 text-[10px]">
-                  On
-                </Badge>
+              {pipelineData?.schedule_cron && (
+                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-status-success)]" />
               )}
             </Button>
+
             <div className="mx-1 h-4 w-px bg-border" />
+
             <Button
               size="sm"
               variant="default"
               onClick={handleRun}
-              disabled={!pipelineId || runMutation.isPending}
-              className="bg-green-600 hover:bg-green-700"
+              disabled={
+                !pipelineId ||
+                runMutation.isPending ||
+                (validateMutation.data && !validateMutation.data.valid)
+              }
+              title={
+                validateMutation.data && !validateMutation.data.valid
+                  ? "Fix validation errors before running"
+                  : undefined
+              }
             >
               {runMutation.isPending ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -256,40 +288,56 @@ export function PipelineEditorPage() {
               )}
               Run
             </Button>
+
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => setShowRuns(!showRuns)}
+              onClick={() => setShowRuns((s) => !s)}
               disabled={!pipelineId}
             >
               <History className="mr-1 h-3 w-3" />
               Runs
               {runs && runs.length > 0 && (
-                <Badge variant="secondary" className="ml-1 text-[10px]">
+                <span className="ml-1.5 inline-flex h-4 min-w-[18px] items-center justify-center rounded-full bg-muted px-1.5 font-mono text-[10px] tabular-nums text-muted-foreground">
                   {runs.length}
-                </Badge>
+                </span>
               )}
             </Button>
           </div>
         </div>
 
         {/* Validation results */}
-        {validateMutation.data && !validateMutation.data.valid && (
-          <div role="alert" className="border-b bg-red-50 px-4 py-2">
-            <div className="flex items-center gap-2 text-sm text-red-800">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="font-medium">Validation errors:</span>
+        <div className="min-h-[40px]">
+          {validateMutation.data && !validateMutation.data.valid && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 border-b border-[var(--color-status-error)]/30 bg-[var(--color-status-error-faint)] px-4 py-2 text-[12px] text-[var(--color-status-error)]"
+            >
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+              <div className="flex-1">
+                <div className="font-semibold">Validation errors</div>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  {validateMutation.data.errors.map((err, i) => (
+                    <li key={i}>
+                      {err.node_id && (
+                        <span className="font-mono">[{err.node_id}] </span>
+                      )}
+                      {err.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <button
+                type="button"
+                onClick={() => validateMutation.reset()}
+                aria-label="Dismiss"
+                className="rounded p-0.5 hover:bg-[var(--color-status-error)]/10"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
-            <ul className="ml-6 mt-1 list-disc text-xs text-red-700">
-              {validateMutation.data.errors.map((err, i) => (
-                <li key={i}>
-                  {err.node_id && <span className="font-mono">[{err.node_id}] </span>}
-                  {err.message}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Toolbar */}
         <div className="border-b bg-white px-4 py-2">
@@ -357,65 +405,78 @@ export function PipelineEditorPage() {
               </div>
               <div className="overflow-auto p-2" style={{ maxHeight: "calc(100% - 3rem)" }}>
                 {!runs || runs.length === 0 ? (
-                  <p className="p-4 text-center text-sm text-muted-foreground">
-                    No runs yet
-                  </p>
+                  <EmptyState
+                    title="No runs yet"
+                    body="Click Run to execute this pipeline."
+                  />
                 ) : (
                   <div className="space-y-2">
-                    {runs.map((run) => (
-                      <div
-                        key={run.id}
-                        className="rounded-lg border p-3 text-sm"
-                      >
-                        <div className="flex items-center justify-between">
-                          <RunStatusBadge status={run.status} />
-                          <span className="text-[10px] text-muted-foreground tabular-nums">
-                            {run.created_at
-                              ? new Intl.DateTimeFormat(undefined, {
-                                  month: "short",
-                                  day: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }).format(new Date(run.created_at))
-                              : ""}
-                          </span>
-                        </div>
-                        {run.rows_processed != null && (
-                          <p className="mt-1 text-xs text-muted-foreground tabular-nums">
-                            {run.rows_processed.toLocaleString()} rows processed
-                          </p>
-                        )}
-                        {run.error_message && (
-                          <p className="mt-1 text-xs text-red-600 line-clamp-2">
-                            {run.error_message}
-                          </p>
-                        )}
-                        {run.started_at && run.finished_at && (
-                          <p className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
-                            Duration:{" "}
-                            {((new Date(run.finished_at).getTime() -
-                              new Date(run.started_at).getTime()) /
-                              1000).toFixed(1)}s
-                          </p>
-                        )}
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="text-[10px] text-muted-foreground">
-                            via {run.triggered_by}
-                          </span>
-                          {(run.status === "failed" || run.status === "cancelled") && (
-                            <button
-                              type="button"
-                              onClick={() => handleRetry(run.id)}
-                              disabled={retryMutation.isPending}
-                              className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:underline disabled:opacity-50"
-                            >
-                              <RotateCcw className="h-2.5 w-2.5" />
-                              Retry
-                            </button>
+                    {runs.map((run) => {
+                      const ts = run.created_at
+                        ? new Intl.DateTimeFormat(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }).format(new Date(run.created_at))
+                        : "";
+                      const durationMs =
+                        run.started_at && run.finished_at
+                          ? new Date(run.finished_at).getTime() -
+                            new Date(run.started_at).getTime()
+                          : null;
+                      return (
+                        <div
+                          key={run.id}
+                          className="rounded-md border border-border p-3 text-sm"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <Badge status={run.status}>{run.status}</Badge>
+                            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                              {durationMs != null
+                                ? `${(durationMs / 1000).toFixed(1)}s`
+                                : "—"}
+                              {run.rows_processed != null &&
+                                ` · ${run.rows_processed.toLocaleString()} rows`}
+                            </span>
+                          </div>
+                          {run.error_message && (
+                            <p className="mt-1 line-clamp-2 text-[11px] text-[var(--color-status-error)]">
+                              {run.error_message}
+                            </p>
                           )}
+                          <div className="mt-1 flex items-center justify-between">
+                            <span className="text-[11px] text-muted-foreground">
+                              {ts} · via {run.triggered_by}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {(run.status === "failed" ||
+                                run.status === "cancelled") && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRetry(run.id)}
+                                  disabled={retryMutation.isPending}
+                                  className="inline-flex items-center gap-0.5 text-[11px] text-[var(--color-status-info)] hover:underline disabled:opacity-50"
+                                >
+                                  <RotateCcw className="h-3 w-3" /> Retry
+                                </button>
+                              )}
+                              {(run.status === "pending" ||
+                                run.status === "running") && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancel(run.id)}
+                                  disabled={cancelMutation.isPending}
+                                  className="inline-flex items-center gap-0.5 text-[11px] text-[var(--color-status-error)] hover:underline disabled:opacity-50"
+                                >
+                                  <Ban className="h-3 w-3" /> Cancel
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -424,26 +485,5 @@ export function PipelineEditorPage() {
         </div>
       </div>
     </ReactFlowProvider>
-  );
-}
-
-function RunStatusBadge({ status }: { status: RunStatus }) {
-  const styles: Record<RunStatus, string> = {
-    pending: "bg-yellow-100 text-yellow-800",
-    running: "bg-blue-100 text-blue-800",
-    completed: "bg-green-100 text-green-800",
-    failed: "bg-red-100 text-red-800",
-    cancelled: "bg-gray-100 text-gray-800",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${styles[status]}`}
-    >
-      {status === "running" && (
-        <Loader2 className="h-2.5 w-2.5 animate-spin" />
-      )}
-      {status}
-    </span>
   );
 }

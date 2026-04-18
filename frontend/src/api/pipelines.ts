@@ -133,6 +133,21 @@ export function useRetryRun() {
   });
 }
 
+export function useCancelRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pipelineId, runId }: { pipelineId: string; runId: string }) => {
+      const { data } = await api.post<PipelineRun>(
+        `/pipelines/${pipelineId}/runs/${runId}/cancel`,
+      );
+      return data;
+    },
+    onSuccess: (_data, { pipelineId }) => {
+      qc.invalidateQueries({ queryKey: ["pipeline-runs", pipelineId] });
+    },
+  });
+}
+
 export function usePipelineRun(pipelineId: string | undefined, runId: string | undefined) {
   return useQuery({
     queryKey: ["pipeline-runs", pipelineId, runId],

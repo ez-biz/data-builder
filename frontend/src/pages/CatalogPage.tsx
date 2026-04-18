@@ -1,11 +1,17 @@
 import { useState } from "react";
-import { ChevronRight, ChevronDown, Database, Table2, Columns3, Loader2 } from "lucide-react";
+import { ChevronRight, ChevronDown, Database, Table2, Loader2, RefreshCw } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useConnectors } from "@/api/connectors";
 import { useSchemas, useTables, useColumns, useTablePreview } from "@/api/catalog";
-import { Button } from "@/components/ui/button";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import type { ColumnInfo } from "@/types/catalog";
+import { cn } from "@/lib/utils";
 
 export function CatalogPage() {
   useDocumentTitle("Catalog Browser");
@@ -19,64 +25,76 @@ export function CatalogPage() {
   } | null>(null);
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4">
-      {/* Tree panel */}
-      <div className="w-80 rounded-lg border">
-        <div className="border-b p-3">
-          <h3 className="text-sm font-semibold">Data Sources</h3>
-        </div>
-        <ScrollArea className="h-[calc(100%-3rem)]">
-          <div className="p-2">
-            {connectors?.map((connector) => (
-              <ConnectorTreeNode
-                key={connector.id}
-                connectorId={connector.id}
-                connectorName={connector.name}
-                connectorType={connector.connector_type}
-                expanded={expandedConnector === connector.id}
-                onToggle={() =>
-                  setExpandedConnector(
-                    expandedConnector === connector.id ? null : connector.id,
-                  )
-                }
-                expandedSchema={
-                  expandedConnector === connector.id ? expandedSchema : null
-                }
-                onSchemaToggle={(schema) =>
-                  setExpandedSchema(expandedSchema === schema ? null : schema)
-                }
-                onTableSelect={(schema, table) =>
-                  setSelectedTable({
-                    connectorId: connector.id,
-                    schema,
-                    table,
-                  })
-                }
-              />
-            ))}
-            {(!connectors || connectors.length === 0) && (
-              <p className="p-4 text-center text-sm text-muted-foreground">
-                No connectors. Add one first.
-              </p>
-            )}
-          </div>
-        </ScrollArea>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Catalog"
+        description="Browse schemas, tables, and columns from your connected databases."
+      />
 
-      {/* Detail panel */}
-      <div className="flex-1 rounded-lg border">
-        {selectedTable ? (
-          <ColumnDetail
-            connectorId={selectedTable.connectorId}
-            schema={selectedTable.schema}
-            table={selectedTable.table}
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-            <Columns3 className="mb-2 h-12 w-12" />
-            <p>Select a table to view its columns</p>
+      <div className="flex h-[calc(100vh-14rem)] gap-4">
+        {/* Tree panel */}
+        <div className="w-80 rounded-md border border-border bg-card">
+          <div className="border-b border-border p-3">
+            <h3 className="text-sm font-semibold">Data Sources</h3>
           </div>
-        )}
+          <ScrollArea className="h-[calc(100%-3rem)]">
+            <div className="p-2">
+              {connectors?.map((connector) => (
+                <ConnectorTreeNode
+                  key={connector.id}
+                  connectorId={connector.id}
+                  connectorName={connector.name}
+                  connectorType={connector.connector_type}
+                  expanded={expandedConnector === connector.id}
+                  onToggle={() =>
+                    setExpandedConnector(
+                      expandedConnector === connector.id ? null : connector.id,
+                    )
+                  }
+                  expandedSchema={
+                    expandedConnector === connector.id ? expandedSchema : null
+                  }
+                  onSchemaToggle={(schema) =>
+                    setExpandedSchema(expandedSchema === schema ? null : schema)
+                  }
+                  selectedTable={
+                    selectedTable?.connectorId === connector.id ? selectedTable : null
+                  }
+                  onTableSelect={(schema, table) =>
+                    setSelectedTable({
+                      connectorId: connector.id,
+                      schema,
+                      table,
+                    })
+                  }
+                />
+              ))}
+              {(!connectors || connectors.length === 0) && (
+                <p className="p-4 text-center text-sm text-muted-foreground">
+                  No connectors. Add one first.
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Detail panel */}
+        <div className="flex-1 rounded-md border border-border bg-card overflow-hidden">
+          {selectedTable ? (
+            <TableDetail
+              connectorId={selectedTable.connectorId}
+              schema={selectedTable.schema}
+              table={selectedTable.table}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center p-8">
+              <EmptyState
+                title="Select a table"
+                body="Choose a connector, schema, and table from the sidebar to view its schema and preview data."
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -90,6 +108,7 @@ function ConnectorTreeNode({
   onToggle,
   expandedSchema,
   onSchemaToggle,
+  selectedTable,
   onTableSelect,
 }: {
   connectorId: string;
@@ -99,6 +118,7 @@ function ConnectorTreeNode({
   onToggle: () => void;
   expandedSchema: string | null;
   onSchemaToggle: (schema: string) => void;
+  selectedTable: { schema: string; table: string } | null;
   onTableSelect: (schema: string, table: string) => void;
 }) {
   const { data: schemasData, isLoading } = useSchemas(expanded ? connectorId : "");
@@ -107,7 +127,7 @@ function ConnectorTreeNode({
     <div>
       <button
         onClick={onToggle}
-        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
+        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         {expanded ? (
           <ChevronDown className="h-3 w-3" />
@@ -115,7 +135,7 @@ function ConnectorTreeNode({
           <ChevronRight className="h-3 w-3" />
         )}
         <Database className="h-4 w-4 text-primary" />
-        <span className="flex-1 text-left font-medium">{connectorName}</span>
+        <span className="flex-1 text-left font-medium text-foreground">{connectorName}</span>
         <Badge variant="outline" className="text-[10px]">
           {connectorType}
         </Badge>
@@ -136,6 +156,9 @@ function ConnectorTreeNode({
                 tableCount={schema.table_count}
                 expanded={expandedSchema === schema.name}
                 onToggle={() => onSchemaToggle(schema.name)}
+                selectedTable={
+                  selectedTable?.schema === schema.name ? selectedTable.table : null
+                }
                 onTableSelect={(table) => onTableSelect(schema.name, table)}
               />
             ))
@@ -152,6 +175,7 @@ function SchemaTreeNode({
   tableCount,
   expanded,
   onToggle,
+  selectedTable,
   onTableSelect,
 }: {
   connectorId: string;
@@ -159,6 +183,7 @@ function SchemaTreeNode({
   tableCount: number;
   expanded: boolean;
   onToggle: () => void;
+  selectedTable: string | null;
   onTableSelect: (table: string) => void;
 }) {
   const { data: tablesData, isLoading } = useTables(
@@ -170,7 +195,7 @@ function SchemaTreeNode({
     <div>
       <button
         onClick={onToggle}
-        className="flex w-full items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent"
+        className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-sm text-muted-foreground hover:text-foreground"
       >
         {expanded ? (
           <ChevronDown className="h-3 w-3" />
@@ -188,33 +213,41 @@ function SchemaTreeNode({
               Loading...
             </div>
           ) : (
-            tablesData?.tables.map((table) => (
-              <button
-                key={table.name}
-                onClick={() => onTableSelect(table.name)}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(
-                    "application/data-builder-table",
-                    JSON.stringify({
-                      connectorId,
-                      schema: schemaName,
-                      table: table.name,
-                    }),
-                  );
-                  e.dataTransfer.effectAllowed = "copy";
-                }}
-                className="flex w-full items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent cursor-grab active:cursor-grabbing"
-              >
-                <Table2 className="h-3 w-3 text-muted-foreground" />
-                <span className="flex-1 text-left">{table.name}</span>
-                {table.row_count_estimate != null && (
-                  <span className="text-[10px] text-muted-foreground">
-                    ~{table.row_count_estimate.toLocaleString()}
-                  </span>
-                )}
-              </button>
-            ))
+            tablesData?.tables.map((table) => {
+              const isSelected = selectedTable === table.name;
+              return (
+                <button
+                  key={table.name}
+                  onClick={() => onTableSelect(table.name)}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(
+                      "application/data-builder-table",
+                      JSON.stringify({
+                        connectorId,
+                        schema: schemaName,
+                        table: table.name,
+                      }),
+                    );
+                    e.dataTransfer.effectAllowed = "copy";
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-sm cursor-grab active:cursor-grabbing",
+                    isSelected
+                      ? "bg-primary/10 text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Table2 className="h-3 w-3 text-muted-foreground" />
+                  <span className="flex-1 text-left font-mono text-xs">{table.name}</span>
+                  {table.row_count_estimate != null && (
+                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                      ~{table.row_count_estimate.toLocaleString()}
+                    </span>
+                  )}
+                </button>
+              );
+            })
           )}
         </div>
       )}
@@ -222,7 +255,7 @@ function SchemaTreeNode({
   );
 }
 
-function ColumnDetail({
+function TableDetail({
   connectorId,
   schema,
   table,
@@ -231,28 +264,55 @@ function ColumnDetail({
   schema: string;
   table: string;
 }) {
-  const [tab, setTab] = useState<"schema" | "preview">("schema");
   const { data, isLoading } = useColumns(connectorId, schema, table);
   const {
     data: previewData,
     isLoading: previewLoading,
-    refetch: fetchPreview,
-  } = useTablePreview(connectorId, schema, table, tab === "preview");
+    isFetching: previewFetching,
+    refetch: refetchPreview,
+  } = useTablePreview(connectorId, schema, table, true);
 
-  if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const schemaColumns: DataTableColumn<ColumnInfo>[] = [
+    {
+      key: "name",
+      header: "Name",
+      cell: (c) => <span className="font-mono text-xs">{c.name}</span>,
+      sortable: true,
+    },
+    {
+      key: "data_type",
+      header: "Type",
+      cell: (c) => (
+        <span className="font-mono text-xs text-muted-foreground">{c.data_type}</span>
+      ),
+      sortable: true,
+    },
+    {
+      key: "is_nullable",
+      header: "Nullable",
+      cell: (c) => (
+        <span className="text-muted-foreground">{c.is_nullable ? "yes" : "no"}</span>
+      ),
+      sortable: true,
+    },
+    {
+      key: "is_primary_key",
+      header: "PK",
+      cell: (c) =>
+        c.is_primary_key ? (
+          <Badge variant="outline" className="text-[10px]">
+            PK
+          </Badge>
+        ) : null,
+    },
+  ];
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b p-4 pb-3">
+      <div className="flex items-center justify-between border-b border-border p-4">
         <div>
           <h3 className="text-lg font-semibold">
-            {schema}.{table}
+            <span className="font-mono">{schema}.{table}</span>
           </h3>
           {data?.row_count_estimate != null && (
             <p className="text-sm text-muted-foreground">
@@ -262,119 +322,127 @@ function ColumnDetail({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b px-4">
-        <button
-          onClick={() => setTab("schema")}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
-            tab === "schema"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Schema
-        </button>
-        <button
-          onClick={() => {
-            setTab("preview");
-            if (!previewData) fetchPreview();
-          }}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
-            tab === "preview"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Preview
-        </button>
-      </div>
+      <Tabs defaultValue="schema" className="flex flex-1 flex-col overflow-hidden">
+        <div className="px-4 pt-3">
+          <TabsList>
+            <TabsTrigger value="schema">Schema</TabsTrigger>
+            <TabsTrigger value="preview">Preview</TabsTrigger>
+          </TabsList>
+        </div>
 
-      <div className="flex-1 overflow-auto p-4">
-        {tab === "schema" ? (
-          <div className="rounded-lg border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="px-4 py-2 text-left font-medium">Column</th>
-                  <th className="px-4 py-2 text-left font-medium">Type</th>
-                  <th className="px-4 py-2 text-left font-medium">Nullable</th>
-                  <th className="px-4 py-2 text-left font-medium">PK</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data?.columns.map((col) => (
-                  <tr key={col.name} className="border-b last:border-0">
-                    <td className="px-4 py-2 font-mono text-xs">{col.name}</td>
-                    <td className="px-4 py-2">
-                      <Badge variant="outline" className="font-mono text-[10px]">
-                        {col.data_type}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-2 text-muted-foreground">
-                      {col.is_nullable ? "yes" : "no"}
-                    </td>
-                    <td className="px-4 py-2">
-                      {col.is_primary_key && (
-                        <Badge variant="default" className="text-[10px]">
-                          PK
-                        </Badge>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : previewLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : previewData ? (
-          <div className="rounded-lg border overflow-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  {previewData.columns.map((col) => (
-                    <th key={col} className="whitespace-nowrap px-3 py-2 text-left font-medium text-xs">
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {previewData.rows.map((row, ri) => (
-                  <tr key={ri} className="border-b last:border-0 hover:bg-accent/30">
-                    {row.map((cell, ci) => (
-                      <td key={ci} className="whitespace-nowrap px-3 py-1.5 font-mono text-xs max-w-[200px] truncate tabular-nums">
-                        {cell == null ? (
-                          <span className="text-muted-foreground italic">NULL</span>
-                        ) : (
-                          String(cell)
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="border-t px-3 py-1.5 text-xs text-muted-foreground">
-              Showing {previewData.total_rows_returned} rows
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <p className="text-sm">Click Preview to load sample data</p>
+        <TabsContent
+          value="schema"
+          className="mt-0 flex-1 overflow-auto p-4"
+        >
+          <DataTable<ColumnInfo>
+            columns={schemaColumns}
+            rows={data?.columns}
+            getRowId={(c) => c.name}
+            loading={isLoading}
+            empty={
+              <EmptyState
+                title="No columns"
+                body="This table has no columns to display."
+              />
+            }
+          />
+        </TabsContent>
+
+        <TabsContent
+          value="preview"
+          className="mt-0 flex-1 overflow-auto p-4"
+        >
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {previewData
+                ? `Showing ${previewData.total_rows_returned} rows`
+                : previewLoading
+                  ? "Loading preview..."
+                  : "No preview data"}
+            </p>
             <Button
+              variant="ghost"
               size="sm"
-              variant="outline"
-              className="mt-2"
-              onClick={() => fetchPreview()}
+              onClick={() => refetchPreview()}
+              disabled={previewFetching}
             >
-              Load Preview
+              <RefreshCw
+                className={cn(
+                  "mr-1 h-3 w-3",
+                  previewFetching && "animate-spin",
+                )}
+              />
+              Refresh
             </Button>
           </div>
-        )}
-      </div>
+          {previewData ? (
+            <PreviewTable columns={previewData.columns} rows={previewData.rows} />
+          ) : (
+            <DataTable
+              columns={[]}
+              rows={previewLoading ? undefined : []}
+              getRowId={() => ""}
+              loading={previewLoading}
+              empty={
+                <EmptyState
+                  title="No preview data"
+                  body="This table has no rows to preview."
+                />
+              }
+            />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
+  );
+}
+
+function PreviewTable({
+  columns,
+  rows,
+}: {
+  columns: string[];
+  rows: unknown[][];
+}) {
+  type PreviewRow = { __id: string; cells: unknown[] };
+  const tableRows: PreviewRow[] = rows.map((r, i) => ({ __id: String(i), cells: r }));
+
+  const tableColumns: DataTableColumn<PreviewRow>[] = columns.map((col, idx) => ({
+    key: `col-${idx}`,
+    header: <span className="font-mono text-[11px]">{col}</span>,
+    cell: (row) => {
+      const v = row.cells[idx];
+      const display =
+        v == null
+          ? null
+          : typeof v === "object"
+          ? JSON.stringify(v)
+          : String(v);
+      return (
+        <span className="font-mono text-xs">
+          {display == null ? (
+            <span className="text-muted-foreground italic">—</span>
+          ) : (
+            <span className="block max-w-[320px] truncate" title={display}>
+              {display}
+            </span>
+          )}
+        </span>
+      );
+    },
+  }));
+
+  return (
+    <DataTable<PreviewRow>
+      columns={tableColumns}
+      rows={tableRows}
+      getRowId={(r) => r.__id}
+      empty={
+        <EmptyState
+          title="No rows"
+          body="This table has no rows to preview."
+        />
+      }
+    />
   );
 }

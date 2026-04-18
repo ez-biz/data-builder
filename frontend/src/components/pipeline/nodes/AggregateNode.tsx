@@ -1,36 +1,21 @@
-import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { BarChart3 } from "lucide-react";
-import { NodeWrapper } from "./NodeWrapper";
+import type { NodeProps } from "@xyflow/react";
+import { NodeShell } from "./NodeShell";
 import type { AggregateNodeData } from "@/types/pipeline";
 
-export function AggregateNode({ id, data, selected }: NodeProps) {
+export function AggregateNode({ data, selected }: NodeProps) {
   const d = data as unknown as AggregateNodeData;
+  const groups = d.groupByColumns?.length ?? 0;
+  const aggs = d.aggregations?.length ?? 0;
+  const summary =
+    groups > 0 || aggs > 0
+      ? `${groups} group${groups === 1 ? "" : "s"}, ${aggs} agg${aggs === 1 ? "" : "s"}`
+      : undefined;
   return (
-    <NodeWrapper
-      nodeId={id}
-      label="Aggregate"
-      icon={<BarChart3 className="h-3.5 w-3.5" />}
-      color="#10b981"
+    <NodeShell
+      kind="aggregate"
+      identifier={d.label || "Aggregate"}
+      summary={summary}
       selected={selected}
-    >
-      <p className="font-medium">{d.label || "Configure aggregation"}</p>
-      {d.groupByColumns && d.groupByColumns.length > 0 && (
-        <p className="text-muted-foreground">
-          Group by {d.groupByColumns.length} column{d.groupByColumns.length !== 1 ? "s" : ""}
-        </p>
-      )}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="input"
-        className="!h-3 !w-3 !border-2 !border-emerald-500 !bg-white"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="output"
-        className="!h-3 !w-3 !border-2 !border-emerald-500 !bg-white"
-      />
-    </NodeWrapper>
+    />
   );
 }

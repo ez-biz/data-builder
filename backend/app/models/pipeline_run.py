@@ -34,5 +34,6 @@ class PipelineRun(UUIDMixin, TimestampMixin, Base):
     rows_processed: Mapped[Optional[int]] = mapped_column(nullable=True)
     node_results: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     triggered_by: Mapped[str] = mapped_column(String(50), default="manual")
+    celery_task_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     pipeline: Mapped["Pipeline"] = relationship(back_populates="runs")

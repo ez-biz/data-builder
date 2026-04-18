@@ -1,37 +1,19 @@
-import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Database } from "lucide-react";
-import { NodeWrapper } from "./NodeWrapper";
+import type { NodeProps } from "@xyflow/react";
+import { NodeShell } from "./NodeShell";
 import type { SourceNodeData } from "@/types/pipeline";
 
-export function SourceNode({ id, data, selected }: NodeProps) {
+export function SourceNode({ data, selected }: NodeProps) {
   const d = data as unknown as SourceNodeData;
+  const id = d.schema && d.table ? `${d.schema}.${d.table}` : "Select a table";
+  const cols = d.selectedColumns?.length ?? d.columns?.length ?? 0;
   return (
-    <NodeWrapper
-      nodeId={id}
-      label="Source"
-      icon={<Database className="h-3.5 w-3.5" />}
-      color="#3b82f6"
+    <NodeShell
+      kind="source"
+      identifier={id}
+      mono={Boolean(d.schema && d.table)}
+      summary={cols > 0 ? `${cols} column${cols === 1 ? "" : "s"}` : undefined}
       selected={selected}
-    >
-      <div className="space-y-1">
-        <p className="font-medium">{d.label || "Select a table"}</p>
-        {d.table && (
-          <p className="text-muted-foreground">
-            {d.schema}.{d.table}
-          </p>
-        )}
-        {d.selectedColumns && d.selectedColumns.length > 0 && (
-          <p className="text-muted-foreground">
-            {d.selectedColumns.length} column{d.selectedColumns.length !== 1 ? "s" : ""}
-          </p>
-        )}
-      </div>
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="output"
-        className="!h-3 !w-3 !border-2 !border-blue-500 !bg-white"
-      />
-    </NodeWrapper>
+      hasInput={false}
+    />
   );
 }

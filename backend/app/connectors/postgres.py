@@ -5,8 +5,16 @@ import time
 
 import psycopg2
 from psycopg2 import sql as pgsql
+from psycopg2.extras import Json
 
 _IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _adapt_value(value):
+    """Wrap dict/list in psycopg2 Json so they can be inserted into JSON/JSONB columns."""
+    if isinstance(value, (dict, list)):
+        return Json(value)
+    return value
 
 from app.connectors.base import (
     BaseConnector,
@@ -200,7 +208,7 @@ class PostgreSQLConnector(BaseConnector):
             )
 
             for row in rows:
-                cur.execute(insert, row)
+                cur.execute(insert, [_adapt_value(v) for v in row])
 
             conn.commit()
             return len(rows)

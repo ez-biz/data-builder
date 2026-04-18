@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 
@@ -14,10 +14,27 @@ export function AppShell() {
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
-        <main id="main-content" className="flex-1 overflow-auto p-6">
-          <Outlet />
+        <main id="main-content" className="flex-1 overflow-auto bg-background">
+          <RouteContent />
         </main>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The Pipeline editor needs the full viewport width for its canvas; every
+ * other page caps at 1280px and gets consistent padding.
+ */
+function RouteContent() {
+  const location = useLocation();
+  const isEditor = /^\/pipelines\/[^/]+$/.test(location.pathname);
+  if (isEditor) {
+    return <Outlet />;
+  }
+  return (
+    <div className="mx-auto max-w-[1280px] px-8 py-6">
+      <Outlet />
     </div>
   );
 }

@@ -153,14 +153,9 @@ export function PipelineCanvas() {
         deleteKeyCode={["Backspace", "Delete"]}
         className="bg-muted/30"
       >
-        <Background gap={20} size={1} />
-        <Controls />
-        <MiniMap
-          nodeStrokeWidth={3}
-          zoomable
-          pannable
-          className="!bottom-2 !right-2"
-        />
+        <Background gap={16} size={1} />
+        <MiniMap pannable zoomable />
+        <Controls showInteractive={false} />
       </ReactFlow>
     </div>
   );

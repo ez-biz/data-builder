@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -23,8 +22,6 @@ from app.services.notification_service import notify_cdc_failure
 from app.services.s3_writer import S3Writer
 
 logger = logging.getLogger("data_builder.cdc")
-
-_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="cdc-worker")
 
 
 # --- CRUD ---
@@ -127,8 +124,10 @@ def trigger_sync(db: Session, job: CDCJob) -> CDCSyncLog:
         "output_format": job.output_format,
     }
 
-    _executor.submit(
-        _run_sync, log_id, job_id, connector_type, config, job_snapshot
+    from app.tasks import run_cdc_sync_task
+
+    run_cdc_sync_task.delay(
+        str(log_id), str(job_id), connector_type, config, job_snapshot
     )
     return log
 
@@ -171,8 +170,10 @@ def trigger_snapshot(db: Session, job: CDCJob) -> CDCSyncLog:
         "output_format": job.output_format,
     }
 
-    _executor.submit(
-        _run_sync, log_id, job_id, connector_type, config, job_snapshot
+    from app.tasks import run_cdc_sync_task
+
+    run_cdc_sync_task.delay(
+        str(log_id), str(job_id), connector_type, config, job_snapshot
     )
     return log
 
@@ -270,6 +271,14 @@ def _run_sync(
         logger.info("CDC sync %s completed: %d rows → %s", log_id, result.row_count, s3_path)
 
     except Exception as e:
+        # Transient infra errors are re-raised so Celery can retry with backoff.
+        # The on_failure hook on the task will mark FAILED if retries are exhausted.
+        import psycopg2
+
+        if isinstance(e, (psycopg2.OperationalError, psycopg2.InterfaceError, ConnectionError, TimeoutError)):
+            logger.warning("CDC sync %s hit transient error, will retry: %s", log_id, e)
+            raise
+
         logger.exception("CDC sync %s failed", log_id)
         try:
             log = db.query(CDCSyncLog).filter(CDCSyncLog.id == log_id).first()
@@ -286,5 +295,27 @@ def _run_sync(
             db.commit()
         except Exception:
             logger.exception("Failed to update CDC sync status after crash")
+    finally:
+        db.close()
+
+
+def mark_sync_failed(log_id: uuid.UUID, job_id: uuid.UUID, error_message: str) -> None:
+    """Mark a sync as failed — used by the Celery task's on_failure hook when
+    retries are exhausted."""
+    db = SessionLocal()
+    try:
+        log = db.query(CDCSyncLog).filter(CDCSyncLog.id == log_id).first()
+        if log and log.status == "running":
+            log.status = "failed"
+            log.error_message = error_message
+            log.finished_at = datetime.now(timezone.utc)
+        job = db.query(CDCJob).filter(CDCJob.id == job_id).first()
+        if job:
+            job.status = CDCStatus.FAILED
+            job.error_message = error_message
+            notify_cdc_failure(job.name, str(job_id), error_message)
+        db.commit()
+    except Exception:
+        logger.exception("mark_sync_failed failed for log %s", log_id)
     finally:
         db.close()
