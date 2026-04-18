@@ -45,3 +45,6 @@ htmlcov/
 
 # Redis
 dump.rdb
+
+# Superpowers brainstorming artifacts
+.superpowers/
