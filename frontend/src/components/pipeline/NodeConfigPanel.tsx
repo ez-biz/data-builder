@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { X, Plus, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,11 +26,31 @@ export function NodeConfigPanel() {
 
   const data = node.data as Record<string, unknown>;
   const nodeType = node.type;
+  const nodeKind = (
+    ["source", "filter", "transform", "join", "aggregate", "destination"] as const
+  ).includes(nodeType as never)
+    ? (nodeType as
+        | "source"
+        | "filter"
+        | "transform"
+        | "join"
+        | "aggregate"
+        | "destination")
+    : undefined;
 
   return (
-    <div className="w-72 border-l bg-white">
-      <div className="flex items-center justify-between border-b p-3">
-        <h3 className="text-sm font-semibold capitalize">{nodeType} Config</h3>
+    <aside className="w-80 border-l border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          {nodeKind ? (
+            <Badge kind={nodeKind} className="capitalize">
+              {nodeKind}
+            </Badge>
+          ) : (
+            <h3 className="text-sm font-semibold capitalize">{nodeType}</h3>
+          )}
+          <span className="text-sm font-semibold text-foreground">Config</span>
+        </div>
         <button
           onClick={() => selectNode(null)}
           className="rounded p-1 hover:bg-accent"
@@ -62,7 +83,7 @@ export function NodeConfigPanel() {
           )}
         </div>
       </ScrollArea>
-    </div>
+    </aside>
   );
 }
 
@@ -365,17 +386,19 @@ function FilterConfig({
                 value={cond.value}
                 onChange={(e) => updateCondition(i, "value", e.target.value)}
               />
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => removeCondition(i)}
                 className="text-destructive px-1"
                 aria-label={`Remove condition ${i + 1}`}
               >
                 <X className="h-3 w-3" />
-              </button>
+              </Button>
             </div>
           ))}
         </div>
-        <Button size="sm" variant="outline" className="mt-2 w-full" onClick={addCondition}>
+        <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={addCondition}>
           <Plus className="mr-1 h-3 w-3" />
           Add Condition
         </Button>
@@ -429,13 +452,15 @@ function TransformConfig({
       <div className="space-y-3 mt-1">
         {transformations.map((t, i) => (
           <div key={i} className="rounded border p-2 space-y-2 relative">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => removeTransform(i)}
-              className="absolute right-1.5 top-1.5 text-destructive"
+              className="absolute right-1.5 top-1.5 h-auto p-1 text-destructive"
               aria-label={`Remove transformation ${i + 1}`}
             >
               <X className="h-3 w-3" />
-            </button>
+            </Button>
 
             <div>
               <label className="text-[10px] text-muted-foreground">Operation</label>
@@ -518,7 +543,7 @@ function TransformConfig({
           </div>
         ))}
       </div>
-      <Button size="sm" variant="outline" className="mt-2 w-full" onClick={addTransform}>
+      <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={addTransform}>
         <Plus className="mr-1 h-3 w-3" />
         Add Transformation
       </Button>
@@ -678,17 +703,19 @@ function AggregateConfig({
                   onChange={(e) => updateAggregation(i, "alias", e.target.value)}
                 />
               </div>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => removeAggregation(i)}
-                className="text-destructive px-1 mt-1"
+                className="text-destructive px-1 mt-1 h-auto py-1"
                 aria-label={`Remove aggregation ${i + 1}`}
               >
                 <X className="h-3 w-3" />
-              </button>
+              </Button>
             </div>
           ))}
         </div>
-        <Button size="sm" variant="outline" className="mt-2 w-full" onClick={addAggregation}>
+        <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={addAggregation}>
           <Plus className="mr-1 h-3 w-3" />
           Add Aggregation
         </Button>
