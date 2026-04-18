@@ -44,7 +44,7 @@ import type { CDCJob } from "@/types/cdc";
 import { CDCDetailDrawer } from "@/components/cdc/CDCDetailDrawer";
 
 export function CDCPage() {
-  useDocumentTitle("CDC Streams — Data Builder");
+  useDocumentTitle("CDC Streams");
   const { data: jobs, isLoading, error } = useCDCJobs();
   const { data: connectors } = useConnectors();
   const { toast } = useToast();

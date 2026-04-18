@@ -21,7 +21,7 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { Connector } from "@/types/connector";
 
 export function ConnectorsPage() {
-  useDocumentTitle("Connectors — Data Builder");
+  useDocumentTitle("Connectors");
   const { data: connectors, isLoading, error } = useConnectors();
   const testMutation = useTestConnector();
   const deleteMutation = useDeleteConnector();

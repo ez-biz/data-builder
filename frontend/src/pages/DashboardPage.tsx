@@ -13,7 +13,7 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { PipelineListItem } from "@/types/pipeline";
 
 export function DashboardPage() {
-  useDocumentTitle("Dashboard — Data Builder");
+  useDocumentTitle("Dashboard");
   const { data: pipelines, isLoading: pLoading } = usePipelines();
   const { data: connectors, isLoading: cLoading } = useConnectors();
   const { data: cdcJobs } = useCDCJobs();

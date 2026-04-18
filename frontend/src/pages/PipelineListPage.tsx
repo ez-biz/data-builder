@@ -40,7 +40,7 @@ type PipelineRow = PipelineListItem & {
 };
 
 export function PipelineListPage() {
-  useDocumentTitle("Pipelines — Data Builder");
+  useDocumentTitle("Pipelines");
   const { data: pipelines, isLoading, error } = usePipelines();
   const deleteMutation = useDeletePipeline();
   const { toast } = useToast();
