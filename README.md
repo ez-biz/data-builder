@@ -249,3 +249,31 @@ data-builder/
 - PostgreSQL queries use parameterized queries via psycopg2
 - CORS is restricted to configured origins
 - Production deployment should use a strong `SECRET_KEY` (warns on weak defaults)
+
+## License
+
+Data Builder is **proprietary software** — Copyright © 2026 Anchit Gupta. All rights reserved.
+
+**Any use, copy, modification, redistribution, or monetization requires prior written permission from the author.** The fact that the source is visible in this repository does not, by itself, grant any right to use it.
+
+What is permitted without asking:
+
+- Viewing the source on the authorized GitHub repository
+- Quoting short excerpts in technical discussion (with attribution)
+- Forking on GitHub solely to propose a pull request back to this repo
+
+What requires explicit permission:
+
+- Running the software for any personal, internal, educational, research, non-profit, or commercial purpose
+- Hosting or serving functionality from the software to any third party
+- Modifying, adapting, translating, or creating derivative works
+- Redistributing, sublicensing, selling, or bundling the software
+- Monetizing the software or any derivative (right expressly reserved to the author)
+- Using any distinctive name, logo, or visual identity associated with the software
+
+Any permitted use must include visible attribution:
+
+> "Data Builder by Anchit Gupta — used with permission.
+> Source: https://github.com/ez-biz/data-builder"
+
+**Requesting permission:** email **anchitgupt2012@gmail.com** with the intended use, scope, duration, whether monetary consideration is involved, and the attribution you plan to display. Full terms: [`LICENSE`](./LICENSE).

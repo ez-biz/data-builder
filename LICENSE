@@ -1,0 +1,135 @@
+Data Builder — Proprietary License
+
+Copyright (c) 2026 Anchit Gupta. All rights reserved.
+
+This software, including all source code, documentation, design specifications,
+screenshots, and any accompanying materials (collectively, the "Software"), is
+the proprietary work of Anchit Gupta ("the Author"). No license or permission
+to use, copy, modify, distribute, publish, sublicense, or sell the Software or
+any portion thereof is granted by the mere fact that the Software has been made
+visible in a public source repository or otherwise disclosed.
+
+------------------------------------------------------------------------------
+1. Permitted Actions Without Prior Permission
+------------------------------------------------------------------------------
+
+You may:
+
+  (a) View the source code from an authorized hosting location (e.g., the
+      Author's GitHub repository) for the purpose of evaluation and learning;
+  (b) Quote short excerpts of the source code or documentation in technical
+      discussion, subject to the Attribution requirement in Section 4;
+  (c) Fork the repository on the same hosting platform solely for the purpose
+      of proposing a contribution back to the Author via pull request.
+
+All other actions require prior written permission from the Author.
+
+------------------------------------------------------------------------------
+2. Actions Requiring Prior Written Permission
+------------------------------------------------------------------------------
+
+Without prior written permission from the Author, you MAY NOT:
+
+  (a) Use the Software, in whole or in part, for any personal, internal,
+      educational, research, non-profit, or commercial purpose;
+  (b) Run the Software in any environment that serves data or functionality
+      to any third party, whether free or paid;
+  (c) Copy, clone, or mirror the Software to any location other than for the
+      limited purpose described in Section 1(c);
+  (d) Modify, adapt, translate, create derivative works of, or incorporate
+      any portion of the Software into another work;
+  (e) Sublicense, sell, lend, lease, rent, or otherwise transfer rights in
+      the Software to any third party;
+  (f) Monetize the Software or any derivative work, including by direct sale,
+      subscription, advertising, paid hosting, or consulting engagements
+      predicated on access to the Software;
+  (g) Use any distinctive name, logo, visual identity, or trade dress
+      associated with the Software or the Author.
+
+The right to monetize the Software is expressly reserved to the Author.
+
+------------------------------------------------------------------------------
+3. Requesting Permission
+------------------------------------------------------------------------------
+
+Requests for permission must be submitted in writing to the Author and must
+describe:
+
+  - the requesting party;
+  - the intended use, including scope, duration, and distribution channels;
+  - whether any monetary consideration is involved;
+  - the credit and attribution that will be displayed.
+
+The Author may grant, deny, or condition permission at sole discretion.
+Permissions are revocable unless expressly stated otherwise in writing.
+
+Contact: anchitgupt2012@gmail.com
+
+------------------------------------------------------------------------------
+4. Attribution Requirement (for Permitted Uses)
+------------------------------------------------------------------------------
+
+Any use, reference, or derivative work that the Author has authorized must
+include prominent and accurate attribution, consisting of at least:
+
+  "Data Builder by Anchit Gupta — used with permission.
+   Source: https://github.com/ez-biz/data-builder"
+
+Attribution must appear in a location visible to end users (e.g., an About
+page, a product footer, or the README of a derivative repository) and must
+not be removed, obscured, or misrepresented.
+
+------------------------------------------------------------------------------
+5. Contributions
+------------------------------------------------------------------------------
+
+By submitting a contribution (a patch, pull request, issue, suggestion, or
+other material) you agree that:
+
+  (a) You have the right to submit the contribution;
+  (b) The contribution is offered to the Author under the same license as
+      this Software, with no additional restrictions;
+  (c) The Author may accept, modify, or reject the contribution at sole
+      discretion, and may relicense the contribution as part of the Software.
+
+------------------------------------------------------------------------------
+6. No Warranty
+------------------------------------------------------------------------------
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+------------------------------------------------------------------------------
+7. Termination
+------------------------------------------------------------------------------
+
+Any right granted under this license terminates automatically and without
+notice upon any breach of its terms. Upon termination you must cease all use
+of the Software and destroy all copies in your possession or control.
+
+------------------------------------------------------------------------------
+8. Governing Law
+------------------------------------------------------------------------------
+
+This license shall be governed by and construed in accordance with the laws
+of India, without regard to its conflict-of-laws principles. Any dispute
+arising out of or in connection with this license shall be subject to the
+exclusive jurisdiction of the courts of India.
+
+------------------------------------------------------------------------------
+9. Entire Agreement
+------------------------------------------------------------------------------
+
+This license constitutes the entire agreement between you and the Author with
+respect to the Software and supersedes any prior or contemporaneous
+understandings. Any permission granted by the Author in writing may amend or
+supplement this license with respect to the permitted party only.
+
+------------------------------------------------------------------------------
+
+If any provision of this license is held to be unenforceable, the remaining
+provisions shall continue in full force and effect.
