@@ -240,9 +240,9 @@ export function PipelineEditorPage() {
               size="sm"
               variant="ghost"
               onClick={handleSave}
-              disabled={!pipelineId || saveMutation.isPending}
+              disabled={saveMutation.isPending || createMutation.isPending}
             >
-              {saveMutation.isPending ? (
+              {saveMutation.isPending || createMutation.isPending ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
               ) : (
                 <Save className="mr-1 h-3 w-3" />
