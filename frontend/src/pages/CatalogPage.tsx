@@ -412,12 +412,20 @@ function PreviewTable({
     header: <span className="font-mono text-[11px]">{col}</span>,
     cell: (row) => {
       const v = row.cells[idx];
+      const display =
+        v == null
+          ? null
+          : typeof v === "object"
+          ? JSON.stringify(v)
+          : String(v);
       return (
         <span className="font-mono text-xs">
-          {v == null ? (
+          {display == null ? (
             <span className="text-muted-foreground italic">—</span>
           ) : (
-            String(v)
+            <span className="block max-w-[320px] truncate" title={display}>
+              {display}
+            </span>
           )}
         </span>
       );
