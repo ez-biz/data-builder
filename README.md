@@ -4,17 +4,23 @@ A visual ETL pipeline platform for building data workflows with drag-and-drop. C
 
 ## Features
 
-- **Database Connectors** — Connect to PostgreSQL and Databricks with encrypted credential storage
-- **Catalog Browser** — Browse schemas, tables, and columns from connected databases
+- **Database Connectors** — Connect to PostgreSQL and Databricks with Fernet-encrypted credential storage
+- **Catalog Browser** — Browse schemas, tables, and columns; preview rows on demand
 - **Visual Pipeline Builder** — Drag-and-drop canvas with 6 node types:
   - **Source** — Read from a database table
   - **Filter** — Apply WHERE conditions
   - **Transform** — Rename, cast, or compute columns
   - **Join** — Inner, left, right, full, or cross joins
   - **Aggregate** — GROUP BY with SUM, COUNT, AVG, MIN, MAX
-  - **Destination** — Write to a target table
+  - **Destination** — Write to a target table (`append` / `overwrite`)
 - **Pipeline Validation** — DAG cycle detection, handle validation, connectivity checks
+- **Distributed Execution** — Celery workers pull jobs from Redis; scale horizontally
+- **Run Control** — Trigger runs, cancel in-flight runs (SIGTERM revoke), retry failed runs
+- **Scheduled Runs** — Attach a cron expression to any pipeline; a polling scheduler dispatches due jobs
+- **CDC Streams (poll-based)** — Track a monotonically-increasing column, write new rows to S3 in JSONL or CSV with exponential-backoff auto-retry on transient DB errors
+- **Monitoring** — Run history with status, duration, rows; aggregated stats dashboard; exportable logs (JSON/CSV); webhook notifications with HMAC signing
 - **Auto-save** — Debounced save (3s) preserves canvas state
+- **Workbench UI** — Dark sidebar + light work area + dot-grid canvas; Emerald primary accent; Inter + JetBrains Mono typography; fully keyboard-accessible
 
 ## Architecture
 
@@ -23,37 +29,48 @@ A visual ETL pipeline platform for building data workflows with drag-and-drop. C
 │  Frontend (React + TypeScript + Vite)               │
 │  ┌──────────┐ ┌──────────────┐ ┌─────────────────┐  │
 │  │ Sidebar  │ │ React Flow   │ │ Config Panel    │  │
-│  │ Catalog  │ │ Canvas       │ │ (node editing)  │  │
+│  │ Catalog  │ │ Canvas       │ │ / Run History   │  │
 │  │ Browser  │ │ (drag/drop)  │ │                 │  │
 │  └──────────┘ └──────────────┘ └─────────────────┘  │
-│       Zustand (canvas state)  TanStack Query (API)  │
+│   Zustand (canvas)  TanStack Query (server state)   │
+│   shadcn/Radix primitives · Workbench design system │
 └───────────────────────┬─────────────────────────────┘
                         │ REST API
 ┌───────────────────────┴─────────────────────────────┐
-│  Backend (Python FastAPI)                           │
+│  Backend (FastAPI) — stateless API server           │
 │  ┌────────────┐ ┌──────────┐ ┌────────────────────┐ │
 │  │ Connectors │ │ Catalog  │ │ Pipeline CRUD +    │ │
-│  │ (PG, DBX)  │ │ Service  │ │ Validation Engine  │ │
+│  │ (PG, DBX)  │ │ Service  │ │ Validation + Runs  │ │
 │  └────────────┘ └──────────┘ └────────────────────┘ │
-│       SQLAlchemy ORM    Fernet Encryption           │
-└───────────────────────┬─────────────────────────────┘
-                        │
-          ┌─────────────┴────────────┐
-          │  PostgreSQL 16           │
-          │  (app metadata)          │
-          └──────────────────────────┘
+│  Scheduler thread (cron poll) · Notification webhook│
+└────────┬──────────────────────┬─────────────────────┘
+         │                      │ dispatch via Redis
+         │                      ▼
+         │          ┌─────────────────────────────┐
+         │          │ Celery worker(s)            │
+         │          │ pipeline.run · cdc.sync     │
+         │          │ (retry + SIGTERM revoke)    │
+         │          └──────────┬──────────────────┘
+         ▼                     ▼
+  ┌──────────────┐    ┌──────────────┐    ┌──────────┐
+  │ PostgreSQL 16│    │  Redis 7     │    │ S3 (CDC) │
+  │ app metadata │    │  broker+back │    │ output   │
+  └──────────────┘    └──────────────┘    └──────────┘
 ```
 
 ## Tech Stack
 
-| Layer     | Technology                                          |
-|-----------|-----------------------------------------------------|
-| Frontend  | React 19, TypeScript, Vite, React Flow, TailwindCSS |
-| State     | Zustand (canvas), TanStack Query (server)           |
-| UI        | shadcn/ui components, Lucide icons                  |
-| Backend   | Python, FastAPI, SQLAlchemy 2.0, Alembic            |
-| Database  | PostgreSQL 16 (metadata), Redis 7 (cache)           |
-| Security  | Fernet encryption (credentials), input validation   |
+| Layer     | Technology                                                            |
+|-----------|-----------------------------------------------------------------------|
+| Frontend  | React 19, TypeScript, Vite, Tailwind 4, React Flow 12                 |
+| State     | Zustand (canvas), TanStack Query (server)                             |
+| UI        | shadcn/Radix primitives, Lucide icons, Inter + JetBrains Mono         |
+| Design    | Workbench tokens (Emerald #059669); custom primitives — `DataTable`, `StatCard`, `EmptyState`, `PageHeader`, `Badge` variants |
+| Backend   | Python, FastAPI, SQLAlchemy 2.0, Alembic, psycopg2                    |
+| Tasking   | Celery 5 + Redis broker; retry policy on transient DB errors          |
+| Database  | PostgreSQL 16 (metadata), Redis 7 (broker + cache)                    |
+| Object    | AWS S3 via boto3 (CDC destination)                                    |
+| Security  | Fernet encryption (credentials), HMAC-SHA256 webhook signing          |
 
 ## Quick Start
 
@@ -97,24 +114,43 @@ pnpm run dev
 
 Open [http://localhost:5173](http://localhost:5173)
 
+### 4. Celery worker (for actual pipeline execution)
+
+```bash
+cd backend
+source .venv/bin/activate
+celery -A app.celery_app worker --loglevel=info --concurrency=4
+```
+
+Without the worker, runs dispatch but stay in `pending`. Docker Compose starts one automatically.
+
 ### Full Docker (alternative)
 
 ```bash
 docker compose -f docker/docker-compose.yml up --build
 ```
 
+Brings up: `postgres`, `redis`, `backend` (FastAPI + scheduler), `worker` (Celery), `frontend`.
+
 ## Development
 
 ```bash
-# Run backend tests (28 tests)
+# Run backend tests (112 tests)
 cd backend && source .venv/bin/activate && pytest -v
 
-# Build frontend
+# Build frontend (tsc + vite)
 cd frontend && pnpm run build
 
 # All-in-one dev (requires docker for PG/Redis)
 make dev
 ```
+
+### Design docs
+
+Completed and upcoming work is captured under `docs/superpowers/`:
+
+- `specs/2026-04-18-ui-ux-revamp-design.md` — Workbench design spec
+- `plans/2026-04-18-ui-ux-revamp.md` — implementation plan (31 tasks)
 
 ### Makefile commands
 
@@ -129,17 +165,27 @@ make dev
 
 ## API Endpoints
 
-| Method | Endpoint                                              | Description          |
-|--------|-------------------------------------------------------|----------------------|
-| GET    | `/api/health`                                         | Health check         |
-| CRUD   | `/api/connectors`                                     | Manage connectors    |
-| POST   | `/api/connectors/{id}/test`                           | Test connection      |
-| GET    | `/api/catalog/{id}/schemas`                           | List schemas         |
-| GET    | `/api/catalog/{id}/schemas/{s}/tables`                | List tables          |
-| GET    | `/api/catalog/{id}/schemas/{s}/tables/{t}/columns`    | List columns         |
-| GET    | `/api/catalog/{id}/schemas/{s}/tables/{t}/preview`    | Preview data         |
-| CRUD   | `/api/pipelines`                                      | Manage pipelines     |
-| POST   | `/api/pipelines/{id}/validate`                        | Validate pipeline    |
+| Method | Endpoint                                                   | Description                        |
+|--------|------------------------------------------------------------|------------------------------------|
+| GET    | `/api/health`                                              | Health check                       |
+| CRUD   | `/api/connectors`                                          | Manage connectors                  |
+| POST   | `/api/connectors/{id}/test`                                | Test connection                    |
+| GET    | `/api/catalog/{id}/schemas`                                | List schemas                       |
+| GET    | `/api/catalog/{id}/schemas/{s}/tables`                     | List tables                        |
+| GET    | `/api/catalog/{id}/schemas/{s}/tables/{t}/columns`         | List columns                       |
+| GET    | `/api/catalog/{id}/schemas/{s}/tables/{t}/preview`         | Preview data                       |
+| CRUD   | `/api/pipelines`                                           | Manage pipelines                   |
+| POST   | `/api/pipelines/{id}/validate`                             | Validate pipeline                  |
+| POST   | `/api/pipelines/{id}/run`                                  | Dispatch a run via Celery          |
+| GET    | `/api/pipelines/{id}/runs`                                 | List recent runs                   |
+| POST   | `/api/pipelines/{id}/runs/{rid}/retry`                     | Retry a failed/cancelled run       |
+| POST   | `/api/pipelines/{id}/runs/{rid}/cancel`                    | Revoke an in-flight Celery task    |
+| CRUD   | `/api/cdc/jobs`                                            | Manage CDC jobs                    |
+| POST   | `/api/cdc/jobs/{id}/sync`                                  | Trigger an incremental CDC sync    |
+| POST   | `/api/cdc/jobs/{id}/snapshot`                              | Trigger a full snapshot CDC sync   |
+| GET    | `/api/cdc/jobs/{id}/logs`                                  | List CDC sync logs                 |
+| GET    | `/api/monitoring/stats?days=N`                             | Aggregated run + CDC stats         |
+| POST   | `/api/monitoring/export/webhook`                           | Push logs to a webhook endpoint    |
 
 Interactive docs at [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger UI).
 
@@ -187,10 +233,14 @@ data-builder/
 
 ## Roadmap
 
-- [x] Phase 1: Foundation — Connectors, catalog, visual canvas, drag & drop
-- [ ] Phase 2: Execution engine — Celery workers, SQL generation, scheduling
-- [ ] Phase 3: CDC — WAL-based change data capture (PostgreSQL → S3)
-- [ ] Phase 4: Text2SQL — Natural language to SQL with LLM integration
+- [x] **Phase 1** — Foundation: connectors, catalog, visual canvas, validation, auto-save
+- [x] **Phase 2a** — Distributed execution engine via Celery + Redis (cancel + retry); cron scheduling; webhook notifications
+- [x] **Phase 2b** — Workbench UI revamp (Emerald + Balanced density; `DataTable`, `StatCard`, `EmptyState`, `PageHeader`)
+- [x] **Phase 3a** — Poll-based CDC (tracking-column → S3 JSONL/CSV) with transient-error retry
+- [ ] **Phase 2c** — SQL pushdown (execute as SQL instead of in-memory Python; unlocks >100k-row datasets)
+- [ ] **Phase 3b** — WAL-based CDC (PostgreSQL logical replication; captures deletes, no row-miss window)
+- [ ] **Phase 4**  — Text2SQL (natural-language → pipeline definition via LLM tool-use)
+- [ ] **UI-follow-ups** — dark mode toggle, command palette (⌘K), Playwright visual-regression suite
 
 ## Security
 
