@@ -39,7 +39,7 @@ class CDCJobResponse(BaseModel):
     status: CDCStatus
     source_schema: str
     source_table: str
-    tracking_column: str
+    tracking_column: Optional[str] = None
     s3_bucket: str
     s3_prefix: str
     s3_region: str
