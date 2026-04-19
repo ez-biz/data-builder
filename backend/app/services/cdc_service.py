@@ -31,6 +31,7 @@ def create_job(db: Session, data: CDCJobCreate) -> CDCJob:
     job = CDCJob(
         name=data.name,
         connector_id=data.connector_id,
+        cdc_kind=data.cdc_kind,
         source_schema=data.source_schema,
         source_table=data.source_table,
         tracking_column=data.tracking_column,
@@ -39,6 +40,8 @@ def create_job(db: Session, data: CDCJobCreate) -> CDCJob:
         s3_region=data.s3_region,
         output_format=data.output_format,
         sync_interval_seconds=data.sync_interval_seconds,
+        checkpoint_interval_seconds=data.checkpoint_interval_seconds,
+        operation_filter=data.operation_filter,
     )
     db.add(job)
     db.commit()
