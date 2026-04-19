@@ -19,13 +19,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     cdc_kind = sa.Enum(
-        "poll", "pg_wal", "mongo_change_stream", name="cdckind"
+        "POLL", "PG_WAL", "MONGO_CHANGE_STREAM", name="cdckind"
     )
     cdc_kind.create(op.get_bind(), checkfirst=True)
 
     op.add_column(
         "cdc_jobs",
-        sa.Column("cdc_kind", cdc_kind, nullable=False, server_default="poll"),
+        sa.Column("cdc_kind", cdc_kind, nullable=False, server_default="POLL"),
     )
     op.add_column(
         "cdc_jobs",
