@@ -452,3 +452,24 @@ def test_sync_handles_tracking_column_not_in_result(db):
     job_after = db.query(CDCJob).filter(CDCJob.id == job.id).first()
     assert job_after.last_value == "100"  # unchanged because tracking col not in result
     assert job_after.total_rows_synced == 1
+
+
+def test_cdc_job_model_has_new_columns(db):
+    """Foundation columns must exist on CDCJob."""
+    from app.models.cdc_job import CDCJob, CDCKind
+
+    assert CDCKind.POLL.value == "poll"
+    assert CDCKind.PG_WAL.value == "pg_wal"
+    assert CDCKind.MONGO_CHANGE_STREAM.value == "mongo_change_stream"
+
+    # Verify columns on the model class
+    cols = {c.name for c in CDCJob.__table__.columns}
+    assert "cdc_kind" in cols
+    assert "resume_token" in cols
+    assert "operation_filter" in cols
+    assert "checkpoint_interval_seconds" in cols
+    assert "celery_task_id" in cols
+
+    # tracking_column must now be nullable
+    tracking_col = CDCJob.__table__.columns["tracking_column"]
+    assert tracking_col.nullable is True
