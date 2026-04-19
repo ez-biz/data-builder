@@ -239,9 +239,11 @@ data-builder/
 - [x] **Phase 3a** — Poll-based CDC (tracking-column → S3 JSONL/CSV) with transient-error retry
 - [ ] **Phase 2c** — SQL pushdown (execute as SQL instead of in-memory Python; unlocks >100k-row datasets)
 - [ ] **Phase 3b** — WAL-based CDC for PostgreSQL (logical replication; captures deletes, no row-miss window)
-- [ ] **Phase 3c** — MongoDB support: new `MongoConnector` + CDC via Change Streams (native `resume_token`, captures insert/update/replace/delete natively)
+- [ ] **Phase 3c** — MongoDB support: new `MongoConnector` + CDC via Change Streams (native `resume_token`, captures insert/update/replace/delete)
 - [ ] **Phase 4**  — Text2SQL (natural-language → pipeline definition via LLM tool-use)
 - [ ] **UI-follow-ups** — dark mode toggle, command palette (⌘K), Playwright visual-regression suite
+
+Detailed scoping, sequencing rationale, and prerequisites for each open phase live in [`docs/superpowers/roadmap.md`](./docs/superpowers/roadmap.md).
 
 ## Security
 
