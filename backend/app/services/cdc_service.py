@@ -59,7 +59,8 @@ def get_job(db: Session, job_id: uuid.UUID) -> CDCJob | None:
 
 def update_job(db: Session, job: CDCJob, data: CDCJobUpdate) -> CDCJob:
     for field in ("name", "tracking_column", "s3_bucket", "s3_prefix",
-                   "s3_region", "output_format", "sync_interval_seconds"):
+                   "s3_region", "output_format", "sync_interval_seconds",
+                   "checkpoint_interval_seconds", "operation_filter"):
         val = getattr(data, field, None)
         if val is not None:
             setattr(job, field, val)
