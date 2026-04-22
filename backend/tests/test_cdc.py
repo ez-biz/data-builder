@@ -138,3 +138,47 @@ def test_test_access_failure(mock_boto3):
 
     writer = S3Writer(bucket="nonexistent")
     assert writer.test_access() is False
+
+
+def test_s3_writer_write_events_path_and_body(monkeypatch):
+    """write_events produces the expected S3 key and JSONL body."""
+    from app.services.s3_writer import S3Writer
+
+    captured = {}
+
+    class _FakeS3:
+        def put_object(self, **kwargs):
+            captured["Bucket"] = kwargs["Bucket"]
+            captured["Key"] = kwargs["Key"]
+            captured["Body"] = kwargs["Body"]
+            captured["ContentType"] = kwargs["ContentType"]
+
+    w = S3Writer.__new__(S3Writer)
+    w._bucket = "my-bucket"
+    w._s3 = _FakeS3()
+
+    events = [
+        {"_op": "upsert", "_table": "public.users", "after": {"id": 1}},
+        {"_op": "upsert", "_table": "public.users", "after": {"id": 2}},
+    ]
+    s3_path = w.write_events(
+        prefix="cdc/",
+        table_name="users",
+        events=events,
+        batch_id="abcd1234",
+    )
+
+    assert s3_path.startswith("s3://my-bucket/cdc/users/")
+    assert s3_path.endswith("abcd1234.jsonl")
+    assert captured["Bucket"] == "my-bucket"
+    assert "users/year=" in captured["Key"]
+    assert captured["Key"].endswith("abcd1234.jsonl")
+    assert captured["ContentType"] == "application/x-ndjson"
+
+    # Each line of body is valid JSON
+    lines = captured["Body"].decode("utf-8").strip().split("\n")
+    assert len(lines) == 2
+    import json
+    for line in lines:
+        obj = json.loads(line)
+        assert obj["_op"] == "upsert"

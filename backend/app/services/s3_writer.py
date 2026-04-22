@@ -86,6 +86,42 @@ class S3Writer:
         logger.info("Wrote %d rows to s3://%s/%s", len(rows), self._bucket, key)
         return f"s3://{self._bucket}/{key}"
 
+    def write_events(
+        self,
+        *,
+        prefix: str,
+        table_name: str,
+        events: list[dict],
+        batch_id: str,
+    ) -> str:
+        """Write a list of already-built event dicts as JSONL. Returns the S3 path.
+
+        Partitioning convention matches write_jsonl:
+            <prefix>/<table>/year=YYYY/month=MM/day=DD/<batch_id>.jsonl
+        """
+        now = datetime.now(timezone.utc)
+        key = (
+            f"{prefix.rstrip('/')}/{table_name}/"
+            f"year={now.year}/month={now.month:02d}/day={now.day:02d}/"
+            f"{batch_id}.jsonl"
+        )
+
+        buf = io.StringIO()
+        for event in events:
+            buf.write(json.dumps(event, default=str) + "\n")
+
+        self._s3.put_object(
+            Bucket=self._bucket,
+            Key=key,
+            Body=buf.getvalue().encode("utf-8"),
+            ContentType="application/x-ndjson",
+        )
+        logger.info(
+            "Wrote %d events to s3://%s/%s",
+            len(events), self._bucket, key,
+        )
+        return f"s3://{self._bucket}/{key}"
+
     def test_access(self) -> bool:
         """Verify we can write to the bucket."""
         try:
