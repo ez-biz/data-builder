@@ -510,6 +510,41 @@ def _watch_poll(task, db: Session, job: CDCJob) -> None:
         _watcher_sleep(job.sync_interval_seconds)
 
 
+def start_job(db: Session, job: CDCJob) -> CDCJob:
+    """Flip a CDC job to RUNNING. The scheduler's next tick will dispatch
+    a cdc.watch task for it."""
+    job.status = CDCStatus.RUNNING
+    job.error_message = None
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def cancel_job(db: Session, job: CDCJob) -> CDCJob:
+    """Stop a CDC job: revoke the running watcher task (if any), set status=IDLE."""
+    if job.celery_task_id:
+        from app.celery_app import celery_app
+
+        try:
+            celery_app.control.revoke(
+                job.celery_task_id, terminate=True, signal="SIGTERM"
+            )
+            logger.info(
+                "Revoked cdc.watch task %s for job %s",
+                job.celery_task_id, job.id,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to revoke cdc.watch task %s", job.celery_task_id
+            )
+
+    job.status = CDCStatus.IDLE
+    job.celery_task_id = None
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 def mark_sync_failed(log_id: uuid.UUID, job_id: uuid.UUID, error_message: str) -> None:
     """Mark a sync as failed — used by the Celery task's on_failure hook when
     retries are exhausted."""
