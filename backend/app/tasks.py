@@ -86,3 +86,19 @@ def run_cdc_sync_task(
         connector_config,
         job_snapshot,
     )
+
+
+class _CDCWatchTask(celery_app.Task):
+    """Base class for the long-running cdc.watch task.
+
+    acks_late + reject_on_worker_lost so a crashed worker's task gets
+    re-dispatched via the scheduler's orphan-detection tick.
+    """
+    acks_late = True
+    reject_on_worker_lost = True
+
+
+@celery_app.task(bind=True, name="cdc.watch", base=_CDCWatchTask)
+def cdc_watch_task(self, job_id: str) -> None:
+    from app.services.cdc_service import _run_watcher
+    _run_watcher(self, uuid.UUID(job_id))

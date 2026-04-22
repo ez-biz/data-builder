@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.connectors.registry import ConnectorRegistry
 from app.database import SessionLocal
-from app.models.cdc_job import CDCJob, CDCStatus, CDCSyncLog
+from app.models.cdc_job import CDCJob, CDCKind, CDCStatus, CDCSyncLog
 from app.models.connector import Connector
 from app.schemas.cdc import CDCJobCreate, CDCJobUpdate
 from app.services.connector_service import get_connector, get_decrypted_config
@@ -301,6 +301,54 @@ def _run_sync(
             logger.exception("Failed to update CDC sync status after crash")
     finally:
         db.close()
+
+
+def _run_watcher(task, job_id: uuid.UUID) -> None:
+    """Entry point for the cdc.watch task. Dispatches to per-kind watcher."""
+    db = SessionLocal()
+    try:
+        job = db.query(CDCJob).filter(CDCJob.id == job_id).first()
+        if not job:
+            logger.info("cdc.watch: job %s not found, exiting", job_id)
+            return
+        if job.status != CDCStatus.RUNNING:
+            logger.info(
+                "cdc.watch: job %s has status=%s (not running), exiting",
+                job_id, job.status,
+            )
+            return
+
+        if job.cdc_kind == CDCKind.POLL:
+            _watch_poll(task, db, job)
+        elif job.cdc_kind == CDCKind.PG_WAL:
+            _watch_pg_wal(task, db, job)
+        elif job.cdc_kind == CDCKind.MONGO_CHANGE_STREAM:
+            _watch_mongo(task, db, job)
+        else:
+            raise ValueError(f"Unknown cdc_kind: {job.cdc_kind}")
+    finally:
+        db.close()
+
+
+def _watch_pg_wal(task, db: Session, job: CDCJob) -> None:
+    """Stub — actual implementation lands in Spec #2 (WAL-based PG CDC)."""
+    raise NotImplementedError(
+        "WAL-based PG CDC watcher is implemented in Spec #2. "
+        "This is the foundation; slot consumer + pypgoutput decoder come next."
+    )
+
+
+def _watch_mongo(task, db: Session, job: CDCJob) -> None:
+    """Stub — actual implementation lands in Spec #3 (MongoDB + Change Streams)."""
+    raise NotImplementedError(
+        "MongoDB Change Streams watcher is implemented in Spec #3. "
+        "This is the foundation; MongoConnector + resume_token consumer come next."
+    )
+
+
+def _watch_poll(task, db: Session, job: CDCJob) -> None:
+    """Placeholder in Task 6 — real implementation lands in Task 7."""
+    raise NotImplementedError("_watch_poll implemented in Task 7")
 
 
 def mark_sync_failed(log_id: uuid.UUID, job_id: uuid.UUID, error_message: str) -> None:
