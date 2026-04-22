@@ -183,6 +183,8 @@ Completed and upcoming work is captured under `docs/superpowers/`:
 | CRUD   | `/api/cdc/jobs`                                            | Manage CDC jobs                    |
 | POST   | `/api/cdc/jobs/{id}/sync`                                  | Trigger an incremental CDC sync    |
 | POST   | `/api/cdc/jobs/{id}/snapshot`                              | Trigger a full snapshot CDC sync   |
+| POST   | `/api/cdc/jobs/{id}/start`                                 | Start the long-running watcher     |
+| POST   | `/api/cdc/jobs/{id}/stop`                                  | Stop (cancel) the watcher          |
 | GET    | `/api/cdc/jobs/{id}/logs`                                  | List CDC sync logs                 |
 | GET    | `/api/monitoring/stats?days=N`                             | Aggregated run + CDC stats         |
 | POST   | `/api/monitoring/export/webhook`                           | Push logs to a webhook endpoint    |
@@ -237,6 +239,7 @@ data-builder/
 - [x] **Phase 2a** — Distributed execution engine via Celery + Redis (cancel + retry); cron scheduling; webhook notifications
 - [x] **Phase 2b** — Workbench UI revamp (Emerald + Balanced density; `DataTable`, `StatCard`, `EmptyState`, `PageHeader`)
 - [x] **Phase 3a** — Poll-based CDC (tracking-column → S3 JSONL/CSV) with transient-error retry
+- [x] **Phase 3a.1** — CDC v2 foundation: `CDCKind` discriminator, event-log JSONL schema, `cdc.watch` long-running watcher pattern, start/stop endpoints; unblocks 3b and 3c
 - [ ] **Phase 2c** — SQL pushdown (execute as SQL instead of in-memory Python; unlocks >100k-row datasets)
 - [ ] **Phase 3b** — WAL-based CDC for PostgreSQL (logical replication; captures deletes, no row-miss window)
 - [ ] **Phase 3c** — MongoDB support: new `MongoConnector` + CDC via Change Streams (native `resume_token`, captures insert/update/replace/delete)
