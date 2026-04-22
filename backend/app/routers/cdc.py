@@ -74,3 +74,21 @@ def trigger_snapshot(job_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.get("/jobs/{job_id}/logs", response_model=list[CDCSyncLogResponse])
 def list_sync_logs(job_id: uuid.UUID, db: Session = Depends(get_db)):
     return cdc_service.get_sync_logs(db, job_id)
+
+
+@router.post("/jobs/{job_id}/start", response_model=CDCJobResponse, status_code=202)
+def start_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Flip the job to RUNNING. Scheduler will dispatch a watcher on next tick."""
+    job = cdc_service.get_job(db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="CDC job not found")
+    return cdc_service.start_job(db, job)
+
+
+@router.post("/jobs/{job_id}/stop", response_model=CDCJobResponse)
+def stop_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Stop a running watcher: revoke the Celery task, set status=IDLE."""
+    job = cdc_service.get_job(db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="CDC job not found")
+    return cdc_service.cancel_job(db, job)

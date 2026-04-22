@@ -95,10 +95,7 @@ For row-level menus: `DropdownMenu` inside the actions column, wrap the cell in 
 See [`docs/superpowers/roadmap.md`](./docs/superpowers/roadmap.md) for scoping. When starting any of these, keep these conventions in mind so the model stays coherent:
 
 - **Phase 2c (SQL pushdown):** keep the in-memory `PipelineExecutor` as the reference path — SQL pushdown is additive, selected per-pipeline via an opt-in flag. Cross-connector pipelines always fall back to the Python path (with pagination).
-- **Phase 3b / 3c (WAL + Change Streams):** plan to introduce a `CDCKind` enum (`poll` / `pg_wal` / `mongo_change_stream`) on `CDCJob` as a discriminator **before** implementing either, so the second kind isn't a schema migration. Add `resume_token: Optional[bytes]` and `operation_filter: list[str]` at the same time; keep `tracking_column` `Optional` (only required for `poll`).
-- **S3 output for event-based CDC:** use a single event-log JSONL schema for both WAL and Change Streams so downstream consumers don't have to branch:
-  ```jsonl
-  {"_op":"insert|update|replace|delete","_lsn_or_token":"…","_ts":"…","_table":"…","before":{…}|null,"after":{…}|null}
-  ```
+- **Phase 3b / 3c (WAL + Change Streams):** the CDC v2 foundation is **shipped** (Phase 3a.1). `CDCKind` enum (`POLL`/`PG_WAL`/`MONGO_CHANGE_STREAM`), `resume_token`, `operation_filter`, `checkpoint_interval_seconds`, event-log JSONL schema, `cdc.watch` watcher pattern, and start/stop endpoints are all in place. `_watch_pg_wal` and `_watch_mongo` are stubs (`NotImplementedError`) waiting for Specs #2 and #3.
+- **S3 output for event-based CDC:** event-log JSONL schema is defined in `docs/cdc-event-schema.md`. Use `build_wal_event` / `build_mongo_event` from `app/services/cdc_events.py` and `S3Writer.write_events` for S3 output. Path format: `<prefix>/<table>/year=YYYY/month=MM/day=DD/<batch_id>.jsonl`.
 - **Phase 3c (MongoDB):** `MongoConnector` is CDC-only in v1 — skip `execute_query` / `write_table`. Schema inference via `$sample`, not full scan. Requires source to be a replica set (doc it; fail fast with a clear error on standalone).
 - **Phase 4 (Text2SQL):** use the Anthropic SDK with prompt caching on schema context. The `claude-api` skill in this repo's environment captures the caching pattern — invoke it when starting. Never auto-execute generated SQL; always surface to the user for review.

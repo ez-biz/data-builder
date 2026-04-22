@@ -4,11 +4,15 @@ from __future__ import annotations
 import logging
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from croniter import croniter
 
+from app.celery_app import celery_app
 from app.database import SessionLocal
+from app.models.cdc_job import CDCJob, CDCStatus
 from app.models.pipeline import Pipeline
 from app.services import run_service
 
@@ -99,5 +103,74 @@ def _check_and_trigger() -> None:
 
             except Exception:
                 logger.exception("Error checking schedule for pipeline %s", pipeline.id)
+    finally:
+        db.close()
+
+    try:
+        _dispatch_orphaned_watchers()
+    except Exception:
+        logger.exception("Scheduler: orphan dispatch failed")
+
+
+def _celery_control():
+    """Indirection for test mocking."""
+    return celery_app.control
+
+
+def _collect_active_task_ids(inspector) -> Optional[set]:
+    """Gather active+reserved+scheduled task IDs across workers.
+
+    Returns None if the inspector reports no response (broker likely down)
+    so the caller can skip this tick rather than re-dispatch blind.
+    """
+    collected = set()
+    for getter in ("active", "reserved", "scheduled"):
+        try:
+            resp = getattr(inspector, getter)()
+        except Exception:
+            return None
+        if resp is None:
+            return None
+        for _worker, tasks in resp.items():
+            for t in tasks or []:
+                tid = t.get("id") if isinstance(t, dict) else None
+                if tid:
+                    collected.add(tid)
+    return collected
+
+
+def _dispatch_orphaned_watchers() -> None:
+    """Find CDC jobs in RUNNING state whose celery_task_id is missing or
+    not actively processed, and re-dispatch a cdc.watch task for each."""
+    control = _celery_control()
+    try:
+        inspector = control.inspect(timeout=1.0)
+    except Exception:
+        logger.exception("Scheduler: celery inspect failed, skipping orphan check")
+        return
+
+    active_ids = _collect_active_task_ids(inspector)
+    if active_ids is None:
+        logger.warning("Scheduler: celery inspect returned no response; skipping")
+        return
+
+    from app.tasks import cdc_watch_task
+
+    db = SessionLocal()
+    try:
+        orphans = (
+            db.query(CDCJob)
+            .filter(CDCJob.status == CDCStatus.RUNNING)
+            .all()
+        )
+        for job in orphans:
+            if job.celery_task_id and job.celery_task_id in active_ids:
+                continue
+            task_id = str(uuid.uuid4())
+            job.celery_task_id = task_id
+            db.commit()
+            cdc_watch_task.apply_async(args=(str(job.id),), task_id=task_id)
+            logger.info("Scheduler: dispatched cdc.watch for orphan job %s (task_id=%s)",
+                        job.id, task_id)
     finally:
         db.close()

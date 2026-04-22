@@ -12,6 +12,7 @@ Living document covering the open phases, rough scoping, and sequencing rational
 | 2a   | Distributed execution (Celery + Redis), cancel, retry, scheduler, notifications | ✅ shipped |
 | 2b   | Workbench UI revamp — Emerald tokens, primitives, canvas recipe | ✅ shipped |
 | 3a   | Poll-based CDC (tracking-column → S3 JSONL/CSV) with transient retry | ✅ shipped |
+| 3a.1 | CDC v2 foundation — `CDCKind` enum, event-log JSONL schema, `cdc.watch` watcher, start/stop endpoints | ✅ shipped |
 | **2c** | **SQL pushdown** | open |
 | **3b** | **WAL-based CDC for PostgreSQL** | open |
 | **3c** | **MongoDB support + Change Streams CDC** | open |
@@ -103,7 +104,7 @@ cur.consume_stream(process_change)   # callback per change message
 **Estimated effort:** 2–3 days. Half of that is slot lifecycle + monitoring, not the happy-path WAL read.
 
 **Prerequisites:**
-- The `cdc_jobs` model needs a `cdc_kind` enum (`poll` vs. `pg_wal`) — introducing this should probably happen alongside 3c so we only pay the migration cost once.
+- ✅ Met — `CDCKind` enum, `resume_token`, `operation_filter`, `checkpoint_interval_seconds`, and the `cdc.watch` long-running watcher pattern are all shipped (Phase 3a.1). `_watch_pg_wal` stub is in place.
 - Workers need durable LSN checkpoints (new column or separate `cdc_checkpoints` table).
 
 **Rollout:** Per-job opt-in (user picks kind when creating). Default stays `poll`.
@@ -154,22 +155,9 @@ with collection.watch(
 
 **The one hard prerequisite:** Source MongoDB must be a **replica set** or sharded cluster. Change streams don't work on standalone. Replica set of 1 is fine for dev.
 
-### Model changes needed (shared with 3b)
+### Model changes needed (shared with 3b) — ✅ shipped in Phase 3a.1
 
-```python
-class CDCKind(str, enum.Enum):
-    POLL = "poll"
-    PG_WAL = "pg_wal"
-    MONGO_CHANGE_STREAM = "mongo_change_stream"
-
-# New fields on CDCJob
-cdc_kind: Mapped[CDCKind]                          # discriminator
-resume_token: Mapped[Optional[bytes]]              # Mongo: BSON resume token; PG: LSN
-operation_filter: Mapped[list[str]]                # subset of insert/update/delete/replace
-# tracking_column becomes Optional (only required for poll kind)
-```
-
-Alembic migration + backfill (`cdc_kind = "poll"` for all existing rows).
+All model changes are in place: `CDCKind` enum (`POLL`/`PG_WAL`/`MONGO_CHANGE_STREAM`), `resume_token`, `operation_filter`, `checkpoint_interval_seconds` on `CDCJob`, `tracking_column` now nullable, Alembic migration applied. `_watch_mongo` stub is in place in `cdc_service.py`.
 
 ### S3 output — event-log schema
 

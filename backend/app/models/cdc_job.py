@@ -18,6 +18,18 @@ class CDCStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class CDCKind(str, enum.Enum):
+    """Which kind of CDC mechanism this job uses.
+
+    poll                 — tracking-column polling (Phase 3a, shipped)
+    pg_wal               — PostgreSQL logical replication (future Spec #2)
+    mongo_change_stream  — MongoDB Change Streams (future Spec #3)
+    """
+    POLL = "poll"
+    PG_WAL = "pg_wal"
+    MONGO_CHANGE_STREAM = "mongo_change_stream"
+
+
 class CDCJob(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "cdc_jobs"
 
@@ -29,10 +41,15 @@ class CDCJob(UUIDMixin, TimestampMixin, Base):
         SQLEnum(CDCStatus), default=CDCStatus.IDLE
     )
 
+    cdc_kind: Mapped[CDCKind] = mapped_column(
+        SQLEnum(CDCKind), nullable=False, default=CDCKind.POLL
+    )
+
     # Source config
     source_schema: Mapped[str] = mapped_column(String(255), nullable=False)
     source_table: Mapped[str] = mapped_column(String(255), nullable=False)
-    tracking_column: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Required only for poll kind; API validates per kind.
+    tracking_column: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # S3 destination config
     s3_bucket: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -46,6 +63,12 @@ class CDCJob(UUIDMixin, TimestampMixin, Base):
     total_rows_synced: Mapped[int] = mapped_column(default=0)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sync_interval_seconds: Mapped[int] = mapped_column(default=300)
+
+    # v2 foundation additions
+    resume_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    operation_filter: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    checkpoint_interval_seconds: Mapped[int] = mapped_column(default=10)
+    celery_task_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     connector: Mapped["Connector"] = relationship()
 

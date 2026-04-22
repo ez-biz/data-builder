@@ -452,3 +452,126 @@ def test_sync_handles_tracking_column_not_in_result(db):
     job_after = db.query(CDCJob).filter(CDCJob.id == job.id).first()
     assert job_after.last_value == "100"  # unchanged because tracking col not in result
     assert job_after.total_rows_synced == 1
+
+
+def test_cdc_job_model_has_new_columns(db):
+    """Foundation columns must exist on CDCJob."""
+    from app.models.cdc_job import CDCJob, CDCKind
+
+    assert CDCKind.POLL.value == "poll"
+    assert CDCKind.PG_WAL.value == "pg_wal"
+    assert CDCKind.MONGO_CHANGE_STREAM.value == "mongo_change_stream"
+
+    # Verify columns on the model class
+    cols = {c.name for c in CDCJob.__table__.columns}
+    assert "cdc_kind" in cols
+    assert "resume_token" in cols
+    assert "operation_filter" in cols
+    assert "checkpoint_interval_seconds" in cols
+    assert "celery_task_id" in cols
+
+    # tracking_column must now be nullable
+    tracking_col = CDCJob.__table__.columns["tracking_column"]
+    assert tracking_col.nullable is True
+
+
+def test_cdc_job_create_poll_requires_tracking_column():
+    """Poll kind without tracking_column must be rejected."""
+    import pydantic
+    from app.schemas.cdc import CDCJobCreate
+
+    with pytest.raises(pydantic.ValidationError) as exc:
+        CDCJobCreate(
+            name="x",
+            connector_id=uuid.uuid4(),
+            cdc_kind="poll",
+            source_schema="public",
+            source_table="users",
+            # tracking_column missing
+            s3_bucket="b",
+        )
+    assert "tracking_column" in str(exc.value)
+
+
+def test_cdc_job_create_pg_wal_rejects_tracking_column():
+    """WAL kind must not receive tracking_column."""
+    import pydantic
+    from app.schemas.cdc import CDCJobCreate
+
+    with pytest.raises(pydantic.ValidationError):
+        CDCJobCreate(
+            name="x",
+            connector_id=uuid.uuid4(),
+            cdc_kind="pg_wal",
+            source_schema="public",
+            source_table="users",
+            tracking_column="updated_at",  # not allowed for WAL
+            s3_bucket="b",
+        )
+
+
+def test_cdc_job_create_pg_wal_forces_event_jsonl():
+    """WAL kind output_format must be event-jsonl."""
+    import pydantic
+    from app.schemas.cdc import CDCJobCreate
+
+    with pytest.raises(pydantic.ValidationError):
+        CDCJobCreate(
+            name="x",
+            connector_id=uuid.uuid4(),
+            cdc_kind="pg_wal",
+            source_schema="public",
+            source_table="users",
+            s3_bucket="b",
+            output_format="jsonl",  # must be event-jsonl
+        )
+
+
+def test_cdc_job_create_pg_wal_defaults_operation_filter():
+    """WAL kind defaults operation_filter to [insert, update, delete]."""
+    from app.schemas.cdc import CDCJobCreate
+
+    m = CDCJobCreate(
+        name="x",
+        connector_id=uuid.uuid4(),
+        cdc_kind="pg_wal",
+        source_schema="public",
+        source_table="users",
+        s3_bucket="b",
+        output_format="event-jsonl",
+    )
+    assert m.operation_filter == ["insert", "update", "delete"]
+
+
+def test_cdc_job_create_mongo_defaults_operation_filter_includes_replace():
+    """Mongo kind defaults include 'replace'."""
+    from app.schemas.cdc import CDCJobCreate
+
+    m = CDCJobCreate(
+        name="x",
+        connector_id=uuid.uuid4(),
+        cdc_kind="mongo_change_stream",
+        source_schema="mydb",
+        source_table="mycoll",
+        s3_bucket="b",
+        output_format="event-jsonl",
+    )
+    assert set(m.operation_filter) == {"insert", "update", "replace", "delete"}
+
+
+def test_cdc_job_create_poll_allows_all_output_formats():
+    """Poll kind accepts jsonl, csv, event-jsonl."""
+    from app.schemas.cdc import CDCJobCreate
+
+    for fmt in ("jsonl", "csv", "event-jsonl"):
+        m = CDCJobCreate(
+            name="x",
+            connector_id=uuid.uuid4(),
+            cdc_kind="poll",
+            source_schema="public",
+            source_table="users",
+            tracking_column="id",
+            s3_bucket="b",
+            output_format=fmt,
+        )
+        assert m.output_format == fmt
