@@ -7,8 +7,11 @@ new/changed rows to S3 in JSONL or CSV format.
 from __future__ import annotations
 
 import logging
+import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -17,6 +20,7 @@ from app.database import SessionLocal
 from app.models.cdc_job import CDCJob, CDCKind, CDCStatus, CDCSyncLog
 from app.models.connector import Connector
 from app.schemas.cdc import CDCJobCreate, CDCJobUpdate
+from app.services.cdc_events import build_poll_upsert_event
 from app.services.connector_service import get_connector, get_decrypted_config
 from app.services.notification_service import notify_cdc_failure
 from app.services.s3_writer import S3Writer
@@ -303,6 +307,61 @@ def _run_sync(
         db.close()
 
 
+@dataclass
+class PollResult:
+    """Outcome of a single poll iteration: raw rows + new tracking value."""
+    columns: list[str]
+    rows: list[list]
+    new_last_value: Optional[str]
+
+
+def _poll_once(
+    connector_type: str,
+    connector_config: dict,
+    job_snapshot: dict,
+) -> PollResult:
+    """Execute one poll cycle and return the raw result.
+
+    Does not touch the DB or S3. Callers handle persistence and writes.
+    """
+    connector = ConnectorRegistry.create(connector_type, connector_config)
+    schema = job_snapshot["source_schema"]
+    table = job_snapshot["source_table"]
+    tracking_col = job_snapshot["tracking_column"]
+    last_value = job_snapshot.get("last_value")
+
+    if last_value:
+        query = (
+            f'SELECT * FROM "{schema}"."{table}" '
+            f'WHERE "{tracking_col}" > %s '
+            f'ORDER BY "{tracking_col}" ASC'
+        )
+        result = connector.execute_query(query, (last_value,))
+    else:
+        query = (
+            f'SELECT * FROM "{schema}"."{table}" '
+            f'ORDER BY "{tracking_col}" ASC'
+        )
+        result = connector.execute_query(query)
+
+    new_last_value = last_value
+    if result.rows:
+        if tracking_col in result.columns:
+            idx = result.columns.index(tracking_col)
+            new_last_value = str(result.rows[-1][idx])
+
+    return PollResult(
+        columns=result.columns,
+        rows=result.rows,
+        new_last_value=new_last_value,
+    )
+
+
+def _watcher_sleep(seconds: int) -> None:
+    """Sleep between watcher iterations. Indirection allows test injection."""
+    time.sleep(seconds)
+
+
 def _run_watcher(task, job_id: uuid.UUID) -> None:
     """Entry point for the cdc.watch task. Dispatches to per-kind watcher."""
     db = SessionLocal()
@@ -347,8 +406,108 @@ def _watch_mongo(task, db: Session, job: CDCJob) -> None:
 
 
 def _watch_poll(task, db: Session, job: CDCJob) -> None:
-    """Placeholder in Task 6 — real implementation lands in Task 7."""
-    raise NotImplementedError("_watch_poll implemented in Task 7")
+    """Long-running poll watcher loop.
+
+    Each iteration: call _poll_once, write to S3 (format-dependent),
+    advance last_value, check status, sleep sync_interval_seconds.
+    Exits cleanly when job.status != RUNNING.
+    """
+    connector = db.query(Connector).filter(Connector.id == job.connector_id).first()
+    if not connector:
+        logger.error("Watcher: connector %s not found for job %s",
+                     job.connector_id, job.id)
+        job.status = CDCStatus.FAILED
+        job.error_message = "Connector not found"
+        db.commit()
+        return
+
+    config = get_decrypted_config(connector)
+    connector_type = connector.connector_type
+
+    while True:
+        db.refresh(job)
+        if job.status != CDCStatus.RUNNING:
+            logger.info("Watcher: job %s status=%s, exiting", job.id, job.status)
+            return
+
+        job_snapshot = {
+            "source_schema": job.source_schema,
+            "source_table": job.source_table,
+            "tracking_column": job.tracking_column,
+            "last_value": job.last_value,
+            "s3_bucket": job.s3_bucket,
+            "s3_prefix": job.s3_prefix,
+            "s3_region": job.s3_region,
+            "output_format": job.output_format,
+        }
+
+        try:
+            result = _poll_once(connector_type, config, job_snapshot)
+        except Exception as e:
+            logger.exception("Watcher: poll failed for job %s", job.id)
+            job.status = CDCStatus.FAILED
+            job.error_message = str(e)
+            db.commit()
+            notify_cdc_failure(job.name, str(job.id), str(e))
+            return
+
+        if result.rows:
+            s3 = S3Writer(bucket=job.s3_bucket, region=job.s3_region)
+            batch_id = uuid.uuid4().hex[:8]
+            table_fq = f"{job.source_schema}.{job.source_table}"
+
+            if job.output_format == "event-jsonl":
+                events = [
+                    build_poll_upsert_event(
+                        row=row,
+                        columns=result.columns,
+                        tracking_column=job.tracking_column,
+                        table_name=table_fq,
+                    )
+                    for row in result.rows
+                ]
+                s3_path = s3.write_events(
+                    prefix=job.s3_prefix,
+                    table_name=job.source_table,
+                    events=events,
+                    batch_id=batch_id,
+                )
+            elif job.output_format == "csv":
+                s3_path = s3.write_csv(
+                    prefix=job.s3_prefix,
+                    table_name=job.source_table,
+                    columns=result.columns,
+                    rows=result.rows,
+                    batch_id=batch_id,
+                )
+            else:
+                s3_path = s3.write_jsonl(
+                    prefix=job.s3_prefix,
+                    table_name=job.source_table,
+                    columns=result.columns,
+                    rows=result.rows,
+                    batch_id=batch_id,
+                )
+
+            job.last_value = result.new_last_value
+            job.total_rows_synced = (job.total_rows_synced or 0) + len(result.rows)
+
+            now = datetime.now(timezone.utc)
+            log = CDCSyncLog(
+                job_id=job.id,
+                started_at=now,
+                finished_at=now,
+                rows_captured=len(result.rows),
+                s3_path=s3_path,
+                status="completed",
+            )
+            db.add(log)
+
+        job.last_sync_at = datetime.now(timezone.utc)
+        job.error_message = None
+        db.commit()
+
+        _watcher_sleep(job.sync_interval_seconds)
 
 
 def mark_sync_failed(log_id: uuid.UUID, job_id: uuid.UUID, error_message: str) -> None:
